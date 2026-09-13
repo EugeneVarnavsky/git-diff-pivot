@@ -1,0 +1,178 @@
+name: Publish
+run-name: Publish ${{ inputs.dry_run && '(dry run)' || '(new version)' }}
+
+# Orchestrates a full release: build native binaries for every platform
+# (each build runs the test suite first), assemble the final npm/ tree into
+# a single "npm-package" artifact, then publish each platform package and
+# the main package from that artifact. Manual trigger only.
+#
+# dry_run (default true) runs every step except the actual `npm publish`
+# upload, via npm's own --dry-run flag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry run (skip the actual npm publish upload)
+        type: boolean
+        default: true
+
+jobs:
+  check-npm-token:
+    name: Check NPM token
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify NPM_TOKEN secret is set
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set. Add it to the repository secrets before publishing."
+            exit 1
+          fi
+
+  build:
+    needs: check-npm-token
+    uses: ./.github/workflows/build-native-binaries.yml
+
+  prepare:
+    name: Prepare npm package
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download win32-x64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: git-diff-pivot-win32-x64
+          path: npm/platforms/win32-x64
+
+      - name: Download linux-x64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: git-diff-pivot-linux-x64
+          path: npm/platforms/linux-x64
+
+      - name: Download darwin-arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: git-diff-pivot-darwin-arm64
+          path: npm/platforms/darwin-arm64
+
+      - name: Set main package version and strip scripts
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+            pkg.version = process.argv[2];
+            if (pkg.optionalDependencies) {
+              for (const dep of Object.keys(pkg.optionalDependencies)) {
+                pkg.optionalDependencies[dep] = process.argv[2];
+              }
+            }
+            delete pkg.scripts;
+            fs.writeFileSync(process.argv[1], JSON.stringify(pkg, null, 2) + '\n');
+          " "npm/root/package.json" "${{ needs.build.outputs.version }}"
+
+      - name: Copy license and third-party notices into the npm package
+        run: |
+          cp LICENSE npm/root/
+          cp LICENSE THIRD-PARTY-NOTICES.txt npm/platforms/win32-x64/
+          cp LICENSE THIRD-PARTY-NOTICES.txt npm/platforms/linux-x64/
+          cp LICENSE THIRD-PARTY-NOTICES.txt npm/platforms/darwin-arm64/
+
+      - name: Upload prepared npm package
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: |
+            npm/root
+            npm/platforms
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Delete per-platform build artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const names = new Set([
+              'git-diff-pivot-win32-x64',
+              'git-diff-pivot-linux-x64',
+              'git-diff-pivot-darwin-arm64',
+            ]);
+            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            for (const artifact of data.artifacts) {
+              if (names.has(artifact.name)) {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+              }
+            }
+
+  publish-platform-packages:
+    name: Publish (${{ matrix.platform }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [win32-x64, linux-x64, darwin-arm64]
+
+    steps:
+      - name: Download prepared npm package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: npm
+
+      - name: Restore execute permission
+        if: matrix.platform != 'win32-x64'
+        run: chmod +x "npm/platforms/${{ matrix.platform }}/git-diff-pivot"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish platform package
+        working-directory: npm/platforms/${{ matrix.platform }}
+        run: npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-main-package:
+    name: Publish main package
+    needs: publish-platform-packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download prepared npm package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: npm
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish main package
+        working-directory: npm/root
+        run: npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

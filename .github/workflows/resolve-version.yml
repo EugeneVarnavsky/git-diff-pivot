@@ -1,0 +1,43 @@
+name: Resolve version
+
+# Reusable workflow: reads the latest repo tag, validates it matches
+# v<major>.<minor>.<patch> (each component a decimal number of arbitrary
+# length), and strips the leading "v" to produce the package version.
+# Fails with an error message if the tag is missing or malformed.
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: Package version derived from the latest tag (tag without the leading "v").
+        value: ${{ jobs.resolve.outputs.version }}
+
+jobs:
+  resolve:
+    name: Resolve version from latest tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve version from latest tag
+        id: resolve
+        shell: bash
+        run: |
+          tag="$(git describe --tags --abbrev=0)"
+          if [ -z "$tag" ]; then
+            echo "::error::No tag found in the repository. Expected the latest tag to match v<major>.<minor>.<patch>."
+            exit 1
+          fi
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Latest tag '$tag' does not match the required format v<major>.<minor>.<patch> (decimal numbers of any length)."
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $version (from tag $tag)" >> "$GITHUB_STEP_SUMMARY"

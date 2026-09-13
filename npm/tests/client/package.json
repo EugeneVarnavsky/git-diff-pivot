@@ -1,0 +1,13 @@
+{
+  "name": "git-diff-pivot-client-smoke-test",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Local end-to-end smoke test: installs git-diff-pivot and its win32-x64 native binary package from the tarballs packed by npm/test-e2e-windows.ps1 into npm/tests/dist, then exercises the real native binary through the public API, as a real consumer would.",
+  "scripts": {
+    "test": "node --test smoke.test.js"
+  },
+  "dependencies": {
+    "git-diff-pivot": "file:../dist/git-diff-pivot-0.1.0.tgz",
+    "@git-diff-pivot/win32-x64": "file:../dist/git-diff-pivot-win32-x64-0.1.0.tgz"
+  }
+}

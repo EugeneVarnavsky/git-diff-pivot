@@ -1,0 +1,29 @@
+{
+  "name": "@git-diff-pivot/darwin-arm64",
+  "version": "0.1.0",
+  "description": "git-diff-pivot native binary for macOS arm64",
+  "license": "MIT AND Apache-2.0",
+  "author": "Eugene Varnavsky",
+  "repository": "https://github.com/EugeneVarnavsky/git-diff-pivot.git",
+  "keywords": [
+    "git-diff-pivot",
+    "native-binary"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "bin": {
+    "git-diff-pivot": "git-diff-pivot"
+  },
+  "files": [
+    "git-diff-pivot",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.txt"
+  ]
+}

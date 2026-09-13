@@ -1,0 +1,24 @@
+# Build output
+build/
+out/
+
+# Visual Studio / VS Code CMake integration
+.vs/
+CMakeUserPresets.json
+.cache/
+
+# Node.js / npm packaging (copied native binaries are build artifacts)
+node_modules/
+npm/platforms/*/git-diff-pivot
+npm/platforms/*/git-diff-pivot.exe
+
+# npm end-to-end smoke test artifacts (npm/test-e2e-windows.ps1)
+npm/tests/dist/
+npm/tests/client/package-lock.json
+
+# Editor artifacts
+*.user
+*.suo
+
+# OS
+Thumbs.db

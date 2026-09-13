@@ -1,0 +1,12 @@
+#pragma once
+
+#include <string_view>
+
+namespace git_diff_pivot {
+
+// Product version derived from git tags at configure time (see
+// cmake/GitVersion.cmake), derives a package version
+// from git history instead of a hand-maintained version file.
+inline constexpr std::string_view kProductVersion = "@GITDIFFPIVOT_VERSION@";
+
+}  // namespace git_diff_pivot

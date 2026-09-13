@@ -1,0 +1,46 @@
+{
+  "name": "git-diff-pivot",
+  "version": "0.1.0",
+  "description": "Finds repeated changed-line sequences across a multi-file Git diff and renders a compressed, review-oriented view.",
+  "license": "MIT",
+  "author": "Eugene Varnavsky",
+  "repository": "https://github.com/EugeneVarnavsky/git-diff-pivot.git",
+  "keywords": [
+    "git",
+    "diff",
+    "cli",
+    "code-review",
+    "pull-request",
+    "unified-diff"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "git-diff-pivot": "bin/index.js"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "os": [
+    "win32",
+    "linux",
+    "darwin"
+  ],
+  "optionalDependencies": {
+    "@git-diff-pivot/win32-x64": "0.1.0",
+    "@git-diff-pivot/linux-x64": "0.1.0",
+    "@git-diff-pivot/darwin-arm64": "0.1.0"
+  },
+  "scripts": {
+    "test": "node --test ../tests/platform-target.test.js ../tests/render-text.test.js ../tests/render-markdown.test.js"
+  }
+}

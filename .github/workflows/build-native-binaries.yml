@@ -1,0 +1,170 @@
+name: Build native binaries
+
+# Reusable workflow: for every supported platform (Windows x64, Linux x64,
+# macOS arm64), runs the test suite against a Release build and, if the
+# tests pass, uploads the Release binary as a short-lived build artifact.
+# It does not publish anything.
+#
+# Can be triggered manually (workflow_dispatch) or called from another
+# workflow (workflow_call).
+
+on:
+  workflow_dispatch: {}
+  workflow_call:
+    outputs:
+      version:
+        description: Package version derived from the latest tag.
+        value: ${{ jobs.resolve-version.outputs.version }}
+
+jobs:
+  resolve-version:
+    name: Resolve version
+    uses: ./.github/workflows/resolve-version.yml
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: resolve-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32-x64
+            configure_preset: windows
+            build_preset: windows-release
+            binary_name: git-diff-pivot.exe
+          - os: ubuntu-latest
+            platform: linux-x64
+            configure_preset: linux
+            build_preset: linux-release
+            binary_name: git-diff-pivot
+          - os: macos-14
+            platform: darwin-arm64
+            configure_preset: macos
+            build_preset: macos-release
+            binary_name: git-diff-pivot
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Set up Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Configure (${{ matrix.configure_preset }})
+        run: cmake --preset ${{ matrix.configure_preset }}
+
+      - name: Build (${{ matrix.build_preset }})
+        run: cmake --build --preset ${{ matrix.build_preset }}
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        id: run_tests_windows
+        shell: pwsh
+        continue-on-error: true
+        run: ctest --preset ${{ matrix.build_preset }} --output-on-failure | Tee-Object -FilePath ctest-output.log
+
+      - name: Run tests (Linux/macOS)
+        if: runner.os != 'Windows'
+        id: run_tests_unix
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ctest --preset ${{ matrix.build_preset }} --output-on-failure | tee ctest-output.log
+
+      - name: Write test summary
+        if: always()
+        shell: bash
+        run: |
+          outcome="${{ runner.os == 'Windows' && steps.run_tests_windows.outcome || steps.run_tests_unix.outcome }}"
+          {
+            echo "### Test Results (${{ matrix.platform }})"
+            if [ "$outcome" = "success" ]; then
+              echo "✅ All tests passed"
+            else
+              echo "❌ Some tests failed"
+              echo '```'
+              awk '/The following tests FAILED:/{flag=1} flag' ctest-output.log
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if tests failed
+        if: (runner.os == 'Windows' && steps.run_tests_windows.outcome != 'success') || (runner.os != 'Windows' && steps.run_tests_unix.outcome != 'success')
+        run: exit 1
+
+      - name: Stage binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = Get-ChildItem -Path build/${{ matrix.configure_preset }} -Recurse -Filter '${{ matrix.binary_name }}' | Select-Object -First 1
+          if (-not $binary) {
+            throw "Could not find built binary '${{ matrix.binary_name }}' under build/${{ matrix.configure_preset }}"
+          }
+          New-Item -ItemType Directory -Path stage -Force | Out-Null
+          Copy-Item $binary.FullName -Destination "stage/${{ matrix.binary_name }}"
+
+      - name: Stage binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          binary="$(find build/${{ matrix.configure_preset }} -type f -name '${{ matrix.binary_name }}' | head -n 1)"
+          if [ -z "$binary" ]; then
+            echo "Could not find built binary '${{ matrix.binary_name }}' under build/${{ matrix.configure_preset }}" >&2
+            exit 1
+          fi
+          mkdir -p stage
+          cp "$binary" "stage/${{ matrix.binary_name }}"
+
+      - name: Set platform package version
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+            pkg.version = process.argv[2];
+            fs.writeFileSync(process.argv[1], JSON.stringify(pkg, null, 2) + '\n');
+          " "npm/platforms/${{ matrix.platform }}/package.json" "${{ needs.resolve-version.outputs.version }}"
+          cp "npm/platforms/${{ matrix.platform }}/package.json" stage/package.json
+
+      - name: Print version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = & ".\stage\${{ matrix.binary_name }}" --version
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Version (${{ matrix.platform }})`n"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $version
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+
+      - name: Print version (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          version="$(./stage/${{ matrix.binary_name }} --version)"
+          {
+            echo "### Version (${{ matrix.platform }})"
+            echo '```'
+            echo "$version"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-diff-pivot-${{ matrix.platform }}
+          path: |
+            stage/${{ matrix.binary_name }}
+            stage/package.json
+          retention-days: 1
+          if-no-files-found: error

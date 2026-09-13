@@ -1,0 +1,29 @@
+{
+  "name": "@git-diff-pivot/win32-x64",
+  "version": "0.1.0",
+  "description": "git-diff-pivot native binary for Windows x64",
+  "license": "MIT AND Apache-2.0",
+  "author": "Eugene Varnavsky",
+  "repository": "https://github.com/EugeneVarnavsky/git-diff-pivot.git",
+  "keywords": [
+    "git-diff-pivot",
+    "native-binary"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "bin": {
+    "git-diff-pivot": "git-diff-pivot.exe"
+  },
+  "files": [
+    "git-diff-pivot.exe",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.txt"
+  ]
+}
