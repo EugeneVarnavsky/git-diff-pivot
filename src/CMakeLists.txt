@@ -1,5 +1,4 @@
 add_library(gitdiffpivot_core STATIC
-    git_diff_pivot/diff_input.cpp
     git_diff_pivot/line_normalization.cpp
     git_diff_pivot/token_interner.cpp
     git_diff_pivot/diff_document.cpp

@@ -144,7 +144,7 @@ std::string FormatHunkHeader(const RenderHunk& hunk) {
 }
 
 // Appends `text` to `out` as a quoted, escaped JSON string.
-void AppendJsonString(std::ostringstream& out, std::string_view text) {
+void AppendJsonString(std::ostream& out, std::string_view text) {
     out << '"';
     for (const unsigned char c : text) {
         switch (c) {
@@ -178,6 +178,9 @@ void AppendJsonString(std::ostringstream& out, std::string_view text) {
 
 }  // namespace
 
+OutputRenderer::OutputRenderer(const ChangeSelection& selection, const TokenInterner& interner)
+    : filtered_(FilterBlankOnlyChanges(selection, interner)), interner_(interner) {}
+
 std::optional<OutputFormat> ParseOutputFormat(std::string_view value) {
     std::string lowerValue(value);
     std::transform(lowerValue.begin(), lowerValue.end(), lowerValue.begin(), [](unsigned char character) {
@@ -195,22 +198,24 @@ std::optional<OutputFormat> ParseOutputFormat(std::string_view value) {
     return std::nullopt;
 }
 
-std::string OutputRenderer::Render(const ChangeSelection& selection, const TokenInterner& interner,
-                                    OutputFormat format) const {
-    const ChangeSelection filtered = FilterBlankOnlyChanges(selection, interner);
+void OutputRenderer::Render(std::ostream& out, OutputFormat format) const {
     switch (format) {
         case OutputFormat::Text:
-            return RenderText(filtered, interner);
+            RenderText(out);
+            return;
         case OutputFormat::Markdown:
-            return RenderMarkdown(filtered, interner);
+            RenderMarkdown(out);
+            return;
         case OutputFormat::Json:
-            return RenderJson(filtered, interner);
+            RenderJson(out);
+            return;
     }
     throw std::invalid_argument("OutputRenderer::Render: unknown OutputFormat");
 }
 
-std::string OutputRenderer::RenderText(const ChangeSelection& selection, const TokenInterner& interner) const {
-    std::ostringstream out;
+void OutputRenderer::RenderText(std::ostream& out) const {
+    const ChangeSelection& selection = filtered_;
+    const TokenInterner& interner = interner_;
     out << selection.commonChanges.size() << " common change(s), " << selection.uniqueLines.size()
         << " unique line(s).\n";
 
@@ -243,12 +248,11 @@ std::string OutputRenderer::RenderText(const ChangeSelection& selection, const T
             }
         }
     }
-
-    return out.str();
 }
 
-std::string OutputRenderer::RenderMarkdown(const ChangeSelection& selection, const TokenInterner& interner) const {
-    std::ostringstream out;
+void OutputRenderer::RenderMarkdown(std::ostream& out) const {
+    const ChangeSelection& selection = filtered_;
+    const TokenInterner& interner = interner_;
     out << "## Compressed diff summary\n\n"
         << "**" << selection.commonChanges.size() << " common change(s), " << selection.uniqueLines.size()
         << " unique line(s).**\n";
@@ -279,8 +283,6 @@ std::string OutputRenderer::RenderMarkdown(const ChangeSelection& selection, con
             out << "```\n";
         }
     }
-
-    return out.str();
 }
 
 // Pretty-printed JSON shape (2-space indent, matching e.g. JSON.stringify(x, null, 2)):
@@ -290,8 +292,9 @@ std::string OutputRenderer::RenderMarkdown(const ChangeSelection& selection, con
 //   "uniqueChanges": [{"filePath":...,
 //     "hunks":[{"oldStart":N,"oldCount":N,"newStart":N,"newCount":N,"lines":[...]}, ...]}, ...]
 // }
-std::string OutputRenderer::RenderJson(const ChangeSelection& selection, const TokenInterner& interner) const {
-    std::ostringstream out;
+void OutputRenderer::RenderJson(std::ostream& out) const {
+    const ChangeSelection& selection = filtered_;
+    const TokenInterner& interner = interner_;
     out << "{\n";
 
     out << "  \"commonChanges\": [";
@@ -364,7 +367,6 @@ std::string OutputRenderer::RenderJson(const ChangeSelection& selection, const T
     out << "]\n";
 
     out << "}\n";
-    return out.str();
 }
 
 }  // namespace git_diff_pivot

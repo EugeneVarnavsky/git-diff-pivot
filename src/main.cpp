@@ -8,7 +8,6 @@
 #include "cli/version.hpp"
 #include "git_diff_pivot/change_selector.hpp"
 #include "git_diff_pivot/diff_document.hpp"
-#include "git_diff_pivot/diff_input.hpp"
 #include "git_diff_pivot/output_renderer.hpp"
 #include "git_diff_pivot/repeated_change_detector.hpp"
 #include "git_diff_pivot/token_interner.hpp"
@@ -56,17 +55,18 @@ int main(int argc, char** argv) {
         return EXIT_SUCCESS;
     }
 
-    std::vector<std::string> rawLines;
-    try {
-        rawLines = options.inputPath ? git_diff_pivot::DiffInputReader::ReadLinesFromFile(*options.inputPath)
-                                      : git_diff_pivot::DiffInputReader::ReadLines(std::cin);
-    } catch (const std::exception& e) {
-        std::cerr << "git-diff-pivot: " << e.what() << '\n';
-        return EXIT_FAILURE;
+    std::ifstream inputFile;
+    if (options.inputPath) {
+        inputFile.open(*options.inputPath, std::ios::in);
+        if (!inputFile) {
+            std::cerr << "git-diff-pivot: Could not open diff input file: " << *options.inputPath << '\n';
+            return EXIT_FAILURE;
+        }
     }
+    std::istream& diffInput = options.inputPath ? static_cast<std::istream&>(inputFile) : std::cin;
 
     git_diff_pivot::TokenInterner interner;
-    const git_diff_pivot::DiffDocument document = git_diff_pivot::UnifiedDiffParser::Parse(rawLines, interner);
+    const git_diff_pivot::DiffDocument document = git_diff_pivot::UnifiedDiffParser::Parse(diffInput, interner);
 
     const git_diff_pivot::RepeatedChangeDetector detector(options.minSequenceLength);
     const auto candidates = detector.Detect(document);
@@ -74,23 +74,18 @@ int main(int argc, char** argv) {
     const git_diff_pivot::ChangeSelector selector(options.minSequenceLength, options.minOccurrenceCount);
     const auto selection = selector.Select(document, candidates);
 
-    const git_diff_pivot::OutputRenderer renderer;
-    const std::string rendered = renderer.Render(selection, interner, options.outputFormat);
-
-    try {
-        if (options.outputPath) {
-            std::ofstream outputFile(*options.outputPath, std::ios::out | std::ios::trunc);
-            if (!outputFile) {
-                throw std::runtime_error("could not open output file: " + *options.outputPath);
-            }
-            outputFile << rendered;
-        } else {
-            std::cout << rendered;
+    std::ofstream outputFile;
+    if (options.outputPath) {
+        outputFile.open(*options.outputPath, std::ios::out | std::ios::trunc);
+        if (!outputFile) {
+            std::cerr << "git-diff-pivot: could not open output file: " << *options.outputPath << '\n';
+            return EXIT_FAILURE;
         }
-    } catch (const std::exception& e) {
-        std::cerr << "git-diff-pivot: " << e.what() << '\n';
-        return EXIT_FAILURE;
     }
+    std::ostream& diffOutput = options.outputPath ? static_cast<std::ostream&>(outputFile) : std::cout;
+
+    const git_diff_pivot::OutputRenderer renderer(selection, interner);
+    renderer.Render(diffOutput, options.outputFormat);
 
     return EXIT_SUCCESS;
 }

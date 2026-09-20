@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <initializer_list>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -45,6 +46,14 @@ ChangeHunk MakeHunk(TokenInterner& interner, std::string filePath,
     return hunk;
 }
 
+// OutputRenderer::Render writes into a std::ostream; tests compare full strings.
+std::string RenderToString(const ChangeSelection& selection, const TokenInterner& interner,
+                            OutputFormat format = OutputFormat::Text) {
+    std::ostringstream out;
+    OutputRenderer(selection, interner).Render(out, format);
+    return out.str();
+}
+
 }  // namespace
 
 TEST_CASE("OutputRenderer renders an empty selection as zero counts and no sections",
@@ -52,8 +61,7 @@ TEST_CASE("OutputRenderer renders an empty selection as zero counts and no secti
     TokenInterner interner;
     ChangeSelection selection;
 
-    OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner) == "0 common change(s), 0 unique line(s).\n");
+    REQUIRE(RenderToString(selection, interner) == "0 common change(s), 0 unique line(s).\n");
 }
 
 TEST_CASE("OutputRenderer renders unique lines grouped by file with no common-change section",
@@ -68,8 +76,7 @@ TEST_CASE("OutputRenderer renders unique lines grouped by file with no common-ch
         UniqueLine{.filePath = "FileB", .line = ChangedLine{.token = tokenB, .lineNumber = 3, .kind = DiffLineKind::Removed}},
     };
 
-    OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner) ==
+    REQUIRE(RenderToString(selection, interner) ==
             "0 common change(s), 2 unique line(s).\n"
             "\n"
             "Unique changes:\n"
@@ -97,8 +104,7 @@ TEST_CASE("OutputRenderer renders a common change section with no unique lines",
             },
     });
 
-    OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner) ==
+    REQUIRE(RenderToString(selection, interner) ==
             "1 common change(s), 0 unique line(s).\n"
             "\n"
             "Common change 1 (2 occurrence(s), 2 line(s)):\n"
@@ -123,8 +129,7 @@ TEST_CASE("OutputRenderer produces the expected compressed output for the canoni
     const ChangeSelector selector;
     const auto selection = selector.Select(document, candidates);
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner) ==
+    REQUIRE(RenderToString(selection, interner) ==
             "1 common change(s), 3 unique line(s).\n"
             "\n"
             "Common change 1 (3 occurrence(s), 3 line(s)):\n"
@@ -172,8 +177,7 @@ TEST_CASE("OutputRenderer renders Markdown for the canonical fixture", "[output-
     const ChangeSelector selector;
     const auto selection = selector.Select(document, candidates);
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner, OutputFormat::Markdown) ==
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
             "## Compressed diff summary\n"
             "\n"
             "**1 common change(s), 3 unique line(s).**\n"
@@ -229,8 +233,7 @@ TEST_CASE("OutputRenderer renders JSON for the canonical fixture", "[output-rend
     const ChangeSelector selector;
     const auto selection = selector.Select(document, candidates);
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner, OutputFormat::Json) ==
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Json) ==
             "{\n"
             "  \"commonChanges\": [\n"
             "    {\n"
@@ -308,8 +311,7 @@ TEST_CASE("OutputRenderer renders empty JSON arrays for an empty selection", "[o
     TokenInterner interner;
     ChangeSelection selection;
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner, OutputFormat::Json) ==
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Json) ==
             "{\n"
             "  \"commonChanges\": [],\n"
             "  \"uniqueChanges\": []\n"
@@ -339,8 +341,7 @@ TEST_CASE("OutputRenderer omits a common change and unique lines that are entire
                       .line = ChangedLine{.token = tokenA, .lineNumber = 6, .kind = DiffLineKind::Added}},
     };
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner) ==
+    REQUIRE(RenderToString(selection, interner) ==
             "0 common change(s), 1 unique line(s).\n"
             "\n"
             "Unique changes:\n"
@@ -365,8 +366,7 @@ TEST_CASE("OutputRenderer keeps a common change that mixes blank and non-blank l
             },
     });
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner) ==
+    REQUIRE(RenderToString(selection, interner) ==
             "1 common change(s), 0 unique line(s).\n"
             "\n"
             "Common change 1 (2 occurrence(s), 2 line(s)):\n"
@@ -397,8 +397,7 @@ TEST_CASE("OutputRenderer omits blank-only changes from Markdown and JSON output
                       .line = ChangedLine{.token = tokenA, .lineNumber = 1, .kind = DiffLineKind::Added}},
     };
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner, OutputFormat::Markdown) ==
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
             "## Compressed diff summary\n"
             "\n"
             "**0 common change(s), 1 unique line(s).**\n"
@@ -411,7 +410,7 @@ TEST_CASE("OutputRenderer omits blank-only changes from Markdown and JSON output
             "@@ -0,0 +1 @@\n"
             "A\n"
             "```\n");
-    REQUIRE(renderer.Render(selection, interner, OutputFormat::Json) ==
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Json) ==
             "{\n"
             "  \"commonChanges\": [],\n"
             "  \"uniqueChanges\": [\n"
@@ -454,8 +453,7 @@ TEST_CASE("OutputRenderer separates unique lines from different original hunks w
                    .hunkIndex = 1},
     };
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner) ==
+    REQUIRE(RenderToString(selection, interner) ==
             "0 common change(s), 3 unique line(s).\n"
             "\n"
             "Unique changes:\n"
@@ -466,7 +464,7 @@ TEST_CASE("OutputRenderer separates unique lines from different original hunks w
             "\n"
             "  @@ -0,0 +10 @@\n"
             "  C\n");
-    REQUIRE(renderer.Render(selection, interner, OutputFormat::Markdown) ==
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
             "## Compressed diff summary\n"
             "\n"
             "**0 common change(s), 3 unique line(s).**\n"
@@ -482,7 +480,7 @@ TEST_CASE("OutputRenderer separates unique lines from different original hunks w
             "@@ -0,0 +10 @@\n"
             "C\n"
             "```\n");
-    REQUIRE(renderer.Render(selection, interner, OutputFormat::Json) ==
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Json) ==
             "{\n"
             "  \"commonChanges\": [],\n"
             "  \"uniqueChanges\": [\n"
@@ -524,8 +522,7 @@ TEST_CASE("OutputRenderer escapes quotes, backslashes, and control characters in
                       .line = ChangedLine{.token = token, .lineNumber = 1, .kind = DiffLineKind::Added}},
     };
 
-    const OutputRenderer renderer;
-    REQUIRE(renderer.Render(selection, interner, OutputFormat::Json) ==
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Json) ==
             "{\n"
             "  \"commonChanges\": [],\n"
             "  \"uniqueChanges\": [\n"
