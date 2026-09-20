@@ -20,5 +20,8 @@ npm/tests/client/package-lock.json
 *.user
 *.suo
 
+# Folder with agent specific content
+.agents/
+
 # OS
 Thumbs.db
