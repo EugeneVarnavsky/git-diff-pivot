@@ -1,8 +1,8 @@
 # git-diff-pivot
 
-`git-diff-pivot` finds identical sequences of changed lines that repeat across a multi-file Git diff (e.g. the same boilerplate added to several files) and renders a compact, review-oriented view: each repeated change is shown once with every file/line occurrence, instead of once per occurrence. This package ships the native `git-diff-pivot` CLI plus a Node.js/TypeScript library for using the same functionality programmatically.
+Certain kinds of large pull requests are dominated by repetitive noise rather than real changes: the same dependency bump repeated across dozens of `package-lock.json` files in a monorepo, the same codemod applied line-for-line to hundreds of source files, the same regenerated boilerplate. Reviewing that diff as-is means scrolling past near-identical hunks to find what's actually different. `git-diff-pivot` removes the repetition: it finds identical sequences of changed lines that recur across a multi-file Git diff and renders each one once, together with every file and line where it occurs — turning hundreds of duplicate hunks into a short list of distinct changes plus whatever is genuinely unique per file. This package ships the native `git-diff-pivot` CLI plus a Node.js/TypeScript library for using the same functionality programmatically.
 
-The `md` output format is purpose-built for reviewing large pull requests: it collapses the same repeated block (a bumped dependency version, a regenerated hash, a re-sorted block) that would otherwise appear dozens or hundreds of times across a diff into a single entry, which is especially useful for reviewing changes to npm lock files (`package-lock.json`, `npm-shrinkwrap.json`) and similar large, repetitive generated files.
+The `md` output format is purpose-built for reviewing pull requests on GitHub: pasted into a PR description or job summary, it turns a huge, repetitive diff into a single collapsed entry for the repeated change plus a short per-file list of what's actually unique, instead of a wall of hundreds of identical-looking hunks. This is especially useful for reviewing changes to lock files (`package-lock.json`, `npm-shrinkwrap.json`) and other large, repetitive generated files.
 
 ## Install
 
@@ -32,16 +32,17 @@ git-diff-pivot [options] [file]
 
 ### Example: a repeated change compressed into Markdown
 
-Given this diff, where two files both add the same two-line logging setup plus one file-specific line:
+Given this diff, where two files both add the same two-line logging setup followed by their own function definition, and `src/foo.py` additionally has one extra line with no counterpart in `src/bar.py`:
 
 ```diff
 diff --git a/src/foo.py b/src/foo.py
 --- a/src/foo.py
 +++ b/src/foo.py
-@@ -1,0 +1,3 @@
+@@ -1,0 +1,4 @@
 +import logging
 +logger = logging.getLogger(__name__)
 +def foo():
++    return 42
 diff --git a/src/bar.py b/src/bar.py
 --- a/src/bar.py
 +++ b/src/bar.py
@@ -51,12 +52,12 @@ diff --git a/src/bar.py b/src/bar.py
 +def bar():
 ```
 
-`git-diff-pivot --output-type md` renders the repeated two-line change once, with both occurrences listed, followed by each file's remaining unique line:
+`git-diff-pivot --output-type md` renders the repeated two-line change once, with both occurrences listed, followed by each file's unique lines — including `return 42`, which appears in only one file and is therefore never treated as a repeated change:
 
 ````markdown
 ## Compressed diff summary
 
-**1 common change(s), 2 unique line(s).**
+**1 common change(s), 3 unique line(s).**
 
 ### Common change 1 (2 occurrence(s), 2 line(s))
 
@@ -75,12 +76,15 @@ diff --git a/src/bar.py b/src/bar.py
 **src/foo.py**
 
 ```diff
+@@ -1,0 +3,2 @@
 +def foo():
++    return 42
 ```
 
 **src/bar.py**
 
 ```diff
+@@ -1,0 +3 @@
 +def bar():
 ```
 ````

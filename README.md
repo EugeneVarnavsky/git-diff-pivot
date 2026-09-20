@@ -8,6 +8,18 @@
 
 ## Installation
 
+### From npm
+
+`git-diff-pivot` is published as an npm package with prebuilt native binaries for Windows, macOS, and Linux; no compiler required.
+
+```bash
+npm install -g git-diff-pivot   # CLI, globally
+npm install git-diff-pivot      # as a project dependency (CLI + library)
+npx git-diff-pivot              # run without installing
+```
+
+### From source
+
 `git-diff-pivot` is built from source with CMake. Requires CMake 3.25+ and a C++20 compiler (MSVC on Windows, or GCC/Clang on Linux/macOS).
 
 ```powershell
