@@ -10,7 +10,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-test:
     name: Build and test native binaries
     if: github.event.pull_request.draft == false
     uses: ./.github/workflows/build-native-binaries.yml
+
+  check:
+    name: Check tests
+    needs: build-and-test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if build-and-test failed
+        if: needs.build-and-test.result != 'success'
+        run: exit 1
