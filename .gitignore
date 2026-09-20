@@ -20,5 +20,12 @@ npm/tests/client/package-lock.json
 *.user
 *.suo
 
+# Folder with agent specific content
+.agents/
+
+# Copilot files
+.github/prompts/
+.github/copilot-instructions.md
+
 # OS
 Thumbs.db

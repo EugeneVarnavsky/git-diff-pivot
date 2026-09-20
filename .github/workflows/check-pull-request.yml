@@ -1,0 +1,16 @@
+name: Check pull request
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: check-pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test native binaries
+    if: github.event.pull_request.draft == false
+    uses: ./.github/workflows/build-native-binaries.yml
