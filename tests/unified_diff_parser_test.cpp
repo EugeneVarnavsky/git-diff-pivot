@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,20 @@
 using git_diff_pivot::DiffLineKind;
 using git_diff_pivot::TokenInterner;
 using git_diff_pivot::UnifiedDiffParser;
+
+namespace {
+
+// Joins test fixture lines the way UnifiedDiffParser::Parse expects to read them: as a stream.
+std::istringstream MakeStream(const std::vector<std::string>& lines) {
+    std::string joined;
+    for (const auto& line : lines) {
+        joined += line;
+        joined += '\n';
+    }
+    return std::istringstream(joined);
+}
+
+}  // namespace
 
 TEST_CASE("UnifiedDiffParser parses a single file with one hunk", "[unified_diff_parser]") {
     const std::vector<std::string> lines = {
@@ -25,7 +40,8 @@ TEST_CASE("UnifiedDiffParser parses a single file with one hunk", "[unified_diff
     };
 
     TokenInterner interner;
-    const auto document = UnifiedDiffParser::Parse(lines, interner);
+    auto stream = MakeStream(lines);
+    const auto document = UnifiedDiffParser::Parse(stream, interner);
 
     REQUIRE(document.HunkCount() == 1);
     const auto& hunk = document.Hunks().front();
@@ -51,7 +67,8 @@ TEST_CASE("UnifiedDiffParser splits multiple hunks in the same file into separat
     };
 
     TokenInterner interner;
-    const auto document = UnifiedDiffParser::Parse(lines, interner);
+    auto stream = MakeStream(lines);
+    const auto document = UnifiedDiffParser::Parse(stream, interner);
 
     REQUIRE(document.HunkCount() == 2);
     REQUIRE(document.Hunks()[0].filePath == "file.txt");
@@ -80,7 +97,8 @@ TEST_CASE("UnifiedDiffParser tracks file identity across multiple files", "[unif
     };
 
     TokenInterner interner;
-    const auto document = UnifiedDiffParser::Parse(lines, interner);
+    auto stream = MakeStream(lines);
+    const auto document = UnifiedDiffParser::Parse(stream, interner);
 
     REQUIRE(document.HunkCount() == 2);
     REQUIRE(document.Hunks()[0].filePath == "a.txt");
@@ -101,7 +119,8 @@ TEST_CASE("UnifiedDiffParser splits hunks on context lines within a hunk", "[uni
     };
 
     TokenInterner interner;
-    const auto document = UnifiedDiffParser::Parse(lines, interner);
+    auto stream = MakeStream(lines);
+    const auto document = UnifiedDiffParser::Parse(stream, interner);
 
     REQUIRE(document.HunkCount() == 2);
     REQUIRE(document.Hunks()[0].lines.size() == 2);
@@ -119,7 +138,8 @@ TEST_CASE("UnifiedDiffParser produces no hunks for a context-only diff", "[unifi
     };
 
     TokenInterner interner;
-    const auto document = UnifiedDiffParser::Parse(lines, interner);
+    auto stream = MakeStream(lines);
+    const auto document = UnifiedDiffParser::Parse(stream, interner);
 
     REQUIRE(document.HunkCount() == 0);
 }
@@ -138,7 +158,8 @@ TEST_CASE("UnifiedDiffParser skips binary diff entries without crashing", "[unif
     };
 
     TokenInterner interner;
-    const auto document = UnifiedDiffParser::Parse(lines, interner);
+    auto stream = MakeStream(lines);
+    const auto document = UnifiedDiffParser::Parse(stream, interner);
 
     REQUIRE(document.HunkCount() == 1);
     REQUIRE(document.Hunks()[0].filePath == "file.txt");
@@ -155,7 +176,8 @@ TEST_CASE("UnifiedDiffParser uses the pre-deletion path for a deleted file", "[u
     };
 
     TokenInterner interner;
-    const auto document = UnifiedDiffParser::Parse(lines, interner);
+    auto stream = MakeStream(lines);
+    const auto document = UnifiedDiffParser::Parse(stream, interner);
 
     REQUIRE(document.HunkCount() == 1);
     REQUIRE(document.Hunks()[0].filePath == "gone.txt");
@@ -174,7 +196,8 @@ TEST_CASE("UnifiedDiffParser preserves diff operation identity for equal text", 
     };
 
     TokenInterner interner;
-    const auto document = UnifiedDiffParser::Parse(lines, interner);
+    auto stream = MakeStream(lines);
+    const auto document = UnifiedDiffParser::Parse(stream, interner);
 
     REQUIRE(document.HunkCount() == 1);
     const auto& hunk = document.Hunks().front();

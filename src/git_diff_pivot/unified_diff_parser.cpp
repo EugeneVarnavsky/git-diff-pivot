@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace git_diff_pivot {
@@ -66,7 +67,7 @@ struct HunkHeader {
 
 }  // namespace
 
-DiffDocument UnifiedDiffParser::Parse(const std::vector<std::string>& lines, TokenInterner& interner) {
+DiffDocument UnifiedDiffParser::Parse(std::istream& input, TokenInterner& interner) {
     DiffDocument document;
 
     std::string currentFilePath;
@@ -85,7 +86,8 @@ DiffDocument UnifiedDiffParser::Parse(const std::vector<std::string>& lines, Tok
         currentHunk.filePath = currentFilePath;
     };
 
-    for (const std::string& rawLine : lines) {
+    std::string rawLine;
+    while (std::getline(input, rawLine)) {
         const std::string_view line = rawLine;
 
         if (line.rfind(kDiffGitPrefix, 0) == 0) {

@@ -15,6 +15,7 @@
 using git_diff_pivot::ChangeSelection;
 using git_diff_pivot::ChangeSelector;
 using git_diff_pivot::DiffDocument;
+using git_diff_pivot::OutputFormat;
 using git_diff_pivot::OutputRenderer;
 using git_diff_pivot::RepeatedChangeDetector;
 using git_diff_pivot::TokenInterner;
@@ -22,14 +23,12 @@ using git_diff_pivot::UnifiedDiffParser;
 
 namespace {
 
-std::vector<std::string> SplitLines(const std::string& text) {
-    std::vector<std::string> lines;
-    std::istringstream stream(text);
-    std::string line;
-    while (std::getline(stream, line)) {
-        lines.push_back(line);
-    }
-    return lines;
+// OutputRenderer::Render writes into a std::ostream; tests compare full strings.
+std::string RenderToString(const ChangeSelection& selection, const TokenInterner& interner,
+                            OutputFormat format = OutputFormat::Text) {
+    std::ostringstream out;
+    OutputRenderer(selection, interner).Render(out, format);
+    return out.str();
 }
 
 }  // namespace
@@ -66,7 +65,8 @@ TEST_CASE("Pipeline integration: complex deterministic diff produces expected co
         "+// gamma-specific line\n";
 
     TokenInterner interner;
-    const DiffDocument document = UnifiedDiffParser::Parse(SplitLines(diffText), interner);
+    std::istringstream diffStream(diffText);
+    const DiffDocument document = UnifiedDiffParser::Parse(diffStream, interner);
 
     REQUIRE(document.HunkCount() == 3);
 
@@ -85,8 +85,7 @@ TEST_CASE("Pipeline integration: complex deterministic diff produces expected co
     // Exactly three unique lines, one per file's file-specific comment.
     REQUIRE(selection.uniqueLines.size() == 3);
 
-    const OutputRenderer renderer;
-    const std::string rendered = renderer.Render(selection, interner);
+    const std::string rendered = RenderToString(selection, interner);
 
     // The rendered output must mention the shared sequence once, list all
     // three occurrences, and list all three file-specific lines under their
@@ -101,7 +100,7 @@ TEST_CASE("Pipeline integration: complex deterministic diff produces expected co
     CHECK(rendered.find("+// gamma-specific line") != std::string::npos);
 
     // Deterministic: rendering the same selection twice yields identical text.
-    const std::string renderedAgain = renderer.Render(selection, interner);
+    const std::string renderedAgain = RenderToString(selection, interner);
     CHECK(rendered == renderedAgain);
 }
 
@@ -116,7 +115,8 @@ TEST_CASE("Pipeline integration: diff with no repeats yields only unique lines",
         "+unique line two\n";
 
     TokenInterner interner;
-    const DiffDocument document = UnifiedDiffParser::Parse(SplitLines(diffText), interner);
+    std::istringstream diffStream(diffText);
+    const DiffDocument document = UnifiedDiffParser::Parse(diffStream, interner);
 
     const RepeatedChangeDetector detector(/*minSequenceLength=*/1);
     const auto candidates = detector.Detect(document);
@@ -127,8 +127,7 @@ TEST_CASE("Pipeline integration: diff with no repeats yields only unique lines",
     CHECK(selection.commonChanges.empty());
     REQUIRE(selection.uniqueLines.size() == 2);
 
-    const OutputRenderer renderer;
-    const std::string rendered = renderer.Render(selection, interner);
+    const std::string rendered = RenderToString(selection, interner);
 
     CHECK(rendered.find("Common change") == std::string::npos);
     CHECK(rendered.find("+unique line one") != std::string::npos);
@@ -157,7 +156,8 @@ TEST_CASE("Pipeline integration: overlapping candidates resolve to the longest c
         "+shared three\n";
 
     TokenInterner interner;
-    const DiffDocument document = UnifiedDiffParser::Parse(SplitLines(diffText), interner);
+    std::istringstream diffStream(diffText);
+    const DiffDocument document = UnifiedDiffParser::Parse(diffStream, interner);
 
     const RepeatedChangeDetector detector(/*minSequenceLength=*/1);
     const auto candidates = detector.Detect(document);
@@ -201,7 +201,8 @@ TEST_CASE("Pipeline integration: a common change consisting only of blank lines 
         " #include <b>\n";
 
     TokenInterner interner;
-    const DiffDocument document = UnifiedDiffParser::Parse(SplitLines(diffText), interner);
+    std::istringstream diffStream(diffText);
+    const DiffDocument document = UnifiedDiffParser::Parse(diffStream, interner);
 
     const RepeatedChangeDetector detector(/*minSequenceLength=*/1);
     const auto candidates = detector.Detect(document);
@@ -214,11 +215,10 @@ TEST_CASE("Pipeline integration: a common change consisting only of blank lines 
     REQUIRE(selection.commonChanges.size() == 1);
     CHECK(selection.uniqueLines.empty());
 
-    const OutputRenderer renderer;
-    CHECK(renderer.Render(selection, interner) == "0 common change(s), 0 unique line(s).\n");
-    CHECK(renderer.Render(selection, interner, git_diff_pivot::OutputFormat::Markdown) ==
+    CHECK(RenderToString(selection, interner) == "0 common change(s), 0 unique line(s).\n");
+    CHECK(RenderToString(selection, interner, git_diff_pivot::OutputFormat::Markdown) ==
           "## Compressed diff summary\n\n**0 common change(s), 0 unique line(s).**\n");
-    CHECK(renderer.Render(selection, interner, git_diff_pivot::OutputFormat::Json) ==
+    CHECK(RenderToString(selection, interner, git_diff_pivot::OutputFormat::Json) ==
           "{\n"
           "  \"commonChanges\": [],\n"
           "  \"uniqueChanges\": []\n"
@@ -260,7 +260,8 @@ TEST_CASE(
         "+// gamma-specific line\n";
 
     TokenInterner interner;
-    const DiffDocument document = UnifiedDiffParser::Parse(SplitLines(diffText), interner);
+    std::istringstream diffStream(diffText);
+    const DiffDocument document = UnifiedDiffParser::Parse(diffStream, interner);
 
     REQUIRE(document.HunkCount() == 3);
 
@@ -289,8 +290,7 @@ TEST_CASE(
     // File-specific comments still differ in content, so they stay unique.
     REQUIRE(selection.uniqueLines.size() == 3);
 
-    const OutputRenderer renderer;
-    const std::string rendered = renderer.Render(selection, interner);
+    const std::string rendered = RenderToString(selection, interner);
 
     // Rendered exactly once as a single common change, using one canonical
     // spelling; the differently-spaced variants must not appear separately.
@@ -316,7 +316,8 @@ TEST_CASE("Pipeline integration: a unique blank-line change is omitted from outp
         "+\n";
 
     TokenInterner interner;
-    const DiffDocument document = UnifiedDiffParser::Parse(SplitLines(diffText), interner);
+    std::istringstream diffStream(diffText);
+    const DiffDocument document = UnifiedDiffParser::Parse(diffStream, interner);
 
     const RepeatedChangeDetector detector(/*minSequenceLength=*/1);
     const auto candidates = detector.Detect(document);
@@ -326,8 +327,7 @@ TEST_CASE("Pipeline integration: a unique blank-line change is omitted from outp
 
     REQUIRE(selection.uniqueLines.size() == 1);
 
-    const OutputRenderer renderer;
-    CHECK(renderer.Render(selection, interner) == "0 common change(s), 0 unique line(s).\n");
+    CHECK(RenderToString(selection, interner) == "0 common change(s), 0 unique line(s).\n");
 }
 
 TEST_CASE("Pipeline integration: unique-change hunk header uses actual old/new line numbers for a replacement",
@@ -344,14 +344,14 @@ TEST_CASE("Pipeline integration: unique-change hunk header uses actual old/new l
         " context line2\n";
 
     TokenInterner interner;
-    const DiffDocument document = UnifiedDiffParser::Parse(SplitLines(diffText), interner);
+    std::istringstream diffStream(diffText);
+    const DiffDocument document = UnifiedDiffParser::Parse(diffStream, interner);
 
     const ChangeSelector selector;
     const ChangeSelection selection = selector.Select(document, {});
     REQUIRE(selection.uniqueLines.size() == 3);
 
-    const OutputRenderer renderer;
-    CHECK(renderer.Render(selection, interner) ==
+    CHECK(RenderToString(selection, interner) ==
           "0 common change(s), 3 unique line(s).\n"
           "\n"
           "Unique changes:\n"
@@ -375,14 +375,14 @@ TEST_CASE("Pipeline integration: unique-change hunk header falls back to the hun
         " ctx2\n";
 
     TokenInterner interner;
-    const DiffDocument document = UnifiedDiffParser::Parse(SplitLines(diffText), interner);
+    std::istringstream diffStream(diffText);
+    const DiffDocument document = UnifiedDiffParser::Parse(diffStream, interner);
 
     const ChangeSelector selector;
     const ChangeSelection selection = selector.Select(document, {});
     REQUIRE(selection.uniqueLines.size() == 2);
 
-    const OutputRenderer renderer;
-    CHECK(renderer.Render(selection, interner) ==
+    CHECK(RenderToString(selection, interner) ==
           "0 common change(s), 2 unique line(s).\n"
           "\n"
           "Unique changes:\n"
