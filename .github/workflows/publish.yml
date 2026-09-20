@@ -17,6 +17,10 @@ on:
         type: boolean
         default: true
 
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
   check-npm-token:
     name: Check NPM token
