@@ -217,7 +217,7 @@ TEST_CASE("Pipeline integration: a common change consisting only of blank lines 
 
     CHECK(RenderToString(selection, interner) == "0 common change(s), 0 unique line(s).\n");
     CHECK(RenderToString(selection, interner, git_diff_pivot::OutputFormat::Markdown) ==
-          "## Compressed diff summary\n\n**0 common change(s), 0 unique line(s).**\n");
+          "**0 common change(s), 0 unique line(s).**\n");
     CHECK(RenderToString(selection, interner, git_diff_pivot::OutputFormat::Json) ==
           "{\n"
           "  \"commonChanges\": [],\n"

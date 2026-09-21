@@ -25,7 +25,7 @@ function countUniqueLines(uniqueChanges) {
 function jsonToMarkdown(result) {
   const { commonChanges, uniqueChanges } = result;
   const parts = [
-    `## Compressed diff summary\n\n**${commonChanges.length} common change(s), ${countUniqueLines(uniqueChanges)} unique line(s).**\n`,
+    `**${commonChanges.length} common change(s), ${countUniqueLines(uniqueChanges)} unique line(s).**\n`,
   ];
 
   commonChanges.forEach((change, index) => {

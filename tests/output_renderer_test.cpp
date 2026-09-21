@@ -142,8 +142,6 @@ TEST_CASE("OutputRenderer groups repeated occurrences in the same file under one
             "    FileB:5\n");
 
     REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
-            "## Compressed diff summary\n"
-            "\n"
             "**1 common change(s), 0 unique line(s).**\n"
             "\n"
             "### Common change 1 (4 occurrence(s), 1 line(s))\n"
@@ -221,8 +219,6 @@ TEST_CASE("OutputRenderer renders Markdown for the canonical fixture", "[output-
     const auto selection = selector.Select(document, candidates);
 
     REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
-            "## Compressed diff summary\n"
-            "\n"
             "**1 common change(s), 3 unique line(s).**\n"
             "\n"
             "### Common change 1 (3 occurrence(s), 3 line(s))\n"
@@ -441,8 +437,6 @@ TEST_CASE("OutputRenderer omits blank-only changes from Markdown and JSON output
     };
 
     REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
-            "## Compressed diff summary\n"
-            "\n"
             "**0 common change(s), 1 unique line(s).**\n"
             "\n"
             "### Unique changes\n"
@@ -508,8 +502,6 @@ TEST_CASE("OutputRenderer separates unique lines from different original hunks w
             "  @@ -0,0 +10 @@\n"
             "  C\n");
     REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
-            "## Compressed diff summary\n"
-            "\n"
             "**0 common change(s), 3 unique line(s).**\n"
             "\n"
             "### Unique changes\n"

@@ -7,7 +7,7 @@ const { jsonToMarkdown } = require('../../lib/render-markdown');
 test('renders an empty result as zero counts and no sections', () => {
   assert.equal(
     jsonToMarkdown({ commonChanges: [], uniqueChanges: [] }),
-    '## Compressed diff summary\n\n**0 common change(s), 0 unique line(s).**\n'
+    '**0 common change(s), 0 unique line(s).**\n'
   );
 });
 
@@ -34,9 +34,7 @@ test('renders the canonical fixture the same way OutputRenderer::RenderMarkdown 
 
   assert.equal(
     jsonToMarkdown(result),
-    '## Compressed diff summary\n' +
-      '\n' +
-      '**1 common change(s), 3 unique line(s).**\n' +
+    '**1 common change(s), 3 unique line(s).**\n' +
       '\n' +
       '### Common change 1 (3 occurrence(s), 3 line(s))\n' +
       '\n' +
@@ -93,9 +91,7 @@ test('separates unique lines from different original hunks with a git-style hunk
 
   assert.equal(
     jsonToMarkdown(result),
-    '## Compressed diff summary\n' +
-      '\n' +
-      '**0 common change(s), 3 unique line(s).**\n' +
+    '**0 common change(s), 3 unique line(s).**\n' +
       '\n' +
       '### Unique changes\n' +
       '\n' +

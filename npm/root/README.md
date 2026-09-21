@@ -55,8 +55,6 @@ diff --git a/src/bar.py b/src/bar.py
 `git-diff-pivot --output-type md` renders the repeated two-line change once, with both occurrences listed, followed by each file's unique lines — including `return 42`, which appears in only one file and is therefore never treated as a repeated change:
 
 ````markdown
-## Compressed diff summary
-
 **1 common change(s), 3 unique line(s).**
 
 ### Common change 1 (2 occurrence(s), 2 line(s))
