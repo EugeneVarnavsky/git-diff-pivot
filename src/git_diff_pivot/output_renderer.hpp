@@ -31,11 +31,11 @@ public:
     void Render(std::ostream& out, OutputFormat format = OutputFormat::Text) const;
 
 private:
-    void RenderText(std::ostream& out) const;
-    void RenderMarkdown(std::ostream& out) const;
-    void RenderJson(std::ostream& out) const;
+    void RenderText(std::ostream& out, const ChangeSelection& selection) const;
+    void RenderMarkdown(std::ostream& out, const ChangeSelection& selection) const;
+    void RenderJson(std::ostream& out, const ChangeSelection& selection) const;
 
-    ChangeSelection filtered_;
+    const ChangeSelection& selection_;
     const TokenInterner& interner_;
 };
 

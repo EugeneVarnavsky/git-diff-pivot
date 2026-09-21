@@ -115,6 +115,49 @@ TEST_CASE("OutputRenderer renders a common change section with no unique lines",
             "    FileB:5\n");
 }
 
+TEST_CASE("OutputRenderer groups repeated occurrences in the same file under one path in text and Markdown",
+          "[output-renderer]") {
+    TokenInterner interner;
+    const auto tokenA = interner.Intern("A");
+
+    ChangeSelection selection;
+    selection.commonChanges.push_back(RepeatedSequence{
+        .tokens = {tokenA},
+        .occurrences =
+            {
+                RepeatedSequenceOccurrence{.filePath = "FileA", .startLine = 1, .length = 1},
+                RepeatedSequenceOccurrence{.filePath = "FileA", .startLine = 10, .length = 1},
+                RepeatedSequenceOccurrence{.filePath = "FileB", .startLine = 5, .length = 1},
+                RepeatedSequenceOccurrence{.filePath = "FileA", .startLine = 20, .length = 1},
+            },
+    });
+
+    REQUIRE(RenderToString(selection, interner) ==
+            "1 common change(s), 0 unique line(s).\n"
+            "\n"
+            "Common change 1 (4 occurrence(s), 1 line(s)):\n"
+            "  A\n"
+            "  Occurrences:\n"
+            "    FileA:1,10,20\n"
+            "    FileB:5\n");
+
+    REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
+            "## Compressed diff summary\n"
+            "\n"
+            "**1 common change(s), 0 unique line(s).**\n"
+            "\n"
+            "### Common change 1 (4 occurrence(s), 1 line(s))\n"
+            "\n"
+            "```diff\n"
+            "A\n"
+            "```\n"
+            "\n"
+            "**Occurrences:**\n"
+            "\n"
+            "- `FileA:1,10,20`\n"
+            "- `FileB:5`\n");
+}
+
 TEST_CASE("OutputRenderer produces the expected compressed output for the canonical fixture",
           "[output-renderer][fixture]") {
     TokenInterner interner;

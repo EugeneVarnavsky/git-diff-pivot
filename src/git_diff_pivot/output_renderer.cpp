@@ -1,15 +1,14 @@
 #include "git_diff_pivot/output_renderer.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <ranges>
-#include <algorithm>
-#include <cctype>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -17,6 +16,30 @@
 namespace git_diff_pivot {
 
 namespace {
+
+// One item together with the file path it was grouped under.
+template <typename TItem>
+struct FilePathGroup {
+    std::string filePath;
+    std::vector<const TItem*> items;
+};
+
+// Groups items that each carry a `filePath` member by that file, preserving
+// each file's first-seen order even when its items aren't contiguous (e.g.
+// a common change's occurrences interleave files in detection order).
+template <typename TItem>
+std::vector<FilePathGroup<TItem>> GroupByFilePath(const std::vector<TItem>& items) {
+    std::vector<FilePathGroup<TItem>> groups;
+    std::unordered_map<std::string, std::size_t> indexByFile;
+    for (const auto& item : items) {
+        const auto [it, inserted] = indexByFile.try_emplace(item.filePath, groups.size());
+        if (inserted) {
+            groups.push_back(FilePathGroup<TItem>{.filePath = item.filePath, .items = {}});
+        }
+        groups[it->second].items.push_back(&item);
+    }
+    return groups;
+}
 
 // One line belonging to a file group, tagged with its originating hunk so
 // runs from different original hunks can be told apart when rendering.
@@ -33,53 +56,21 @@ struct FileGroup {
     std::vector<FileGroupLine> lines;
 };
 
-// Groups unique lines by file, preserving each file's first-seen order
-// (ChangeSelector emits them in original diff/hunk order already).
+// Groups unique lines by file, preserving each file's first-seen order.
 std::vector<FileGroup> GroupByFile(const std::vector<UniqueLine>& uniqueLines) {
     std::vector<FileGroup> groups;
-    std::unordered_map<std::string, std::size_t> indexByFile;
-    for (const auto& unique : uniqueLines) {
-        const auto [it, inserted] = indexByFile.try_emplace(unique.filePath, groups.size());
-        if (inserted) {
-            groups.push_back(FileGroup{.filePath = unique.filePath, .lines = {}});
+    for (const auto& keyedGroup : GroupByFilePath(uniqueLines)) {
+        FileGroup group{.filePath = keyedGroup.filePath, .lines = {}};
+        group.lines.reserve(keyedGroup.items.size());
+        for (const auto* unique : keyedGroup.items) {
+            group.lines.push_back(FileGroupLine{.hunkIndex = unique->hunkIndex,
+                                                 .line = &unique->line,
+                                                 .hunkAnchorOldLine = unique->hunkAnchorOldLine,
+                                                 .hunkAnchorNewLine = unique->hunkAnchorNewLine});
         }
-        groups[it->second].lines.push_back(FileGroupLine{.hunkIndex = unique.hunkIndex,
-                                                           .line = &unique.line,
-                                                           .hunkAnchorOldLine = unique.hunkAnchorOldLine,
-                                                           .hunkAnchorNewLine = unique.hunkAnchorNewLine});
+        groups.push_back(std::move(group));
     }
     return groups;
-}
-
-// A changed line's interned text carries its diff operation as a leading
-// '+'/'-' marker. A line is blank if nothing but whitespace follows that marker.
-bool IsBlankLineText(std::string_view text) {
-    if (!text.empty() && (text.front() == '+' || text.front() == '-')) {
-        text.remove_prefix(1);
-    }
-    return text.find_first_not_of(" \t\r\n") == std::string_view::npos;
-}
-
-bool IsBlankOnlySequence(const std::vector<TokenId>& tokens, const TokenInterner& interner) {
-    return std::all_of(tokens.begin(), tokens.end(),
-                        [&](const TokenId token) { return IsBlankLineText(interner.TextFor(token)); });
-}
-
-// A change consisting only of blank added/removed lines carries no review
-// value, so it must not appear in any output format.
-ChangeSelection FilterBlankOnlyChanges(const ChangeSelection& selection, const TokenInterner& interner) {
-    ChangeSelection filtered;
-    for (const auto& change : selection.commonChanges) {
-        if (!IsBlankOnlySequence(change.tokens, interner)) {
-            filtered.commonChanges.push_back(change);
-        }
-    }
-    for (const auto& unique : selection.uniqueLines) {
-        if (!IsBlankLineText(interner.TextFor(unique.line.token))) {
-            filtered.uniqueLines.push_back(unique);
-        }
-    }
-    return filtered;
 }
 
 // One run of consecutive unique lines from the same original hunk, ready to
@@ -143,6 +134,69 @@ std::string FormatHunkHeader(const RenderHunk& hunk) {
     return out.str();
 }
 
+// One file's occurrence start lines, in first-seen order.
+struct FileOccurrences {
+    std::string filePath;
+    std::vector<std::uint32_t> startLines;
+};
+
+// Groups a common change's occurrences by file, preserving each file's
+// first-seen order, so text/markdown output can print the path once per
+// file followed by every line it occurs on.
+std::vector<FileOccurrences> GroupOccurrencesByFile(
+    const std::vector<RepeatedSequenceOccurrence>& occurrences) {
+    std::vector<FileOccurrences> groups;
+    for (const auto& keyedGroup : GroupByFilePath(occurrences)) {
+        FileOccurrences group{.filePath = keyedGroup.filePath, .startLines = {}};
+        group.startLines.reserve(keyedGroup.items.size());
+        for (const auto* occurrence : keyedGroup.items) {
+            group.startLines.push_back(occurrence->startLine);
+        }
+        groups.push_back(std::move(group));
+    }
+    return groups;
+}
+
+// Writes `values` comma-separated, with no leading/trailing separator.
+void WriteCommaSeparated(std::ostream& out, const std::vector<std::uint32_t>& values) {
+    for (std::size_t k = 0; k < values.size(); ++k) {
+        out << (k == 0 ? "" : ",") << values[k];
+    }
+}
+
+// A changed line's interned text carries its diff operation as a leading
+// '+'/'-' marker. A line is blank if nothing but whitespace follows that marker.
+bool IsBlankLineText(std::string_view text) {
+    if (!text.empty() && (text.front() == '+' || text.front() == '-')) {
+        text.remove_prefix(1);
+    }
+    return text.find_first_not_of(" \t\r\n") == std::string_view::npos;
+}
+
+bool IsBlankOnlySequence(const std::vector<TokenId>& tokens, const TokenInterner& interner) {
+    return std::all_of(tokens.begin(), tokens.end(),
+                        [&](const TokenId token) { return IsBlankLineText(interner.TextFor(token)); });
+}
+
+// A change consisting only of blank added/removed lines carries no review
+// value, so it must not appear in any rendered output. `ChangeSelector`
+// deliberately keeps such changes in its result (detection/selection see the
+// full picture); hiding them is a display concern, so it lives here.
+ChangeSelection FilterBlankOnlyChanges(const ChangeSelection& selection, const TokenInterner& interner) {
+    ChangeSelection filtered;
+    for (const auto& change : selection.commonChanges) {
+        if (!IsBlankOnlySequence(change.tokens, interner)) {
+            filtered.commonChanges.push_back(change);
+        }
+    }
+    for (const auto& unique : selection.uniqueLines) {
+        if (!IsBlankLineText(interner.TextFor(unique.line.token))) {
+            filtered.uniqueLines.push_back(unique);
+        }
+    }
+    return filtered;
+}
+
 // Appends `text` to `out` as a quoted, escaped JSON string.
 void AppendJsonString(std::ostream& out, std::string_view text) {
     out << '"';
@@ -176,10 +230,27 @@ void AppendJsonString(std::ostream& out, std::string_view text) {
     out << '"';
 }
 
+// Writes a 2-space-indented JSON array of `count` items: `writeItem(i)`
+// renders item `i` (including its own closing brace/indent, if any).
+// `itemIndent`/`closeIndent` are the indentation of each item and of the
+// array's closing bracket, matching JSON.stringify(x, null, 2) output.
+void WriteJsonArray(std::ostream& out, std::size_t count, std::string_view itemIndent,
+                    std::string_view closeIndent, const std::function<void(std::size_t)>& writeItem) {
+    out << '[';
+    for (std::size_t i = 0; i < count; ++i) {
+        out << (i == 0 ? "\n" : ",\n") << itemIndent;
+        writeItem(i);
+    }
+    if (count != 0) {
+        out << '\n' << closeIndent;
+    }
+    out << ']';
+}
+
 }  // namespace
 
 OutputRenderer::OutputRenderer(const ChangeSelection& selection, const TokenInterner& interner)
-    : filtered_(FilterBlankOnlyChanges(selection, interner)), interner_(interner) {}
+    : selection_(selection), interner_(interner) {}
 
 std::optional<OutputFormat> ParseOutputFormat(std::string_view value) {
     std::string lowerValue(value);
@@ -199,22 +270,22 @@ std::optional<OutputFormat> ParseOutputFormat(std::string_view value) {
 }
 
 void OutputRenderer::Render(std::ostream& out, OutputFormat format) const {
+    const ChangeSelection filtered = FilterBlankOnlyChanges(selection_, interner_);
     switch (format) {
         case OutputFormat::Text:
-            RenderText(out);
+            RenderText(out, filtered);
             return;
         case OutputFormat::Markdown:
-            RenderMarkdown(out);
+            RenderMarkdown(out, filtered);
             return;
         case OutputFormat::Json:
-            RenderJson(out);
+            RenderJson(out, filtered);
             return;
     }
     throw std::invalid_argument("OutputRenderer::Render: unknown OutputFormat");
 }
 
-void OutputRenderer::RenderText(std::ostream& out) const {
-    const ChangeSelection& selection = filtered_;
+void OutputRenderer::RenderText(std::ostream& out, const ChangeSelection& selection) const {
     const TokenInterner& interner = interner_;
     out << selection.commonChanges.size() << " common change(s), " << selection.uniqueLines.size()
         << " unique line(s).\n";
@@ -227,8 +298,10 @@ void OutputRenderer::RenderText(std::ostream& out) const {
             out << "  " << interner.TextFor(token) << '\n';
         }
         out << "  Occurrences:\n";
-        for (const auto& occurrence : change.occurrences) {
-            out << "    " << occurrence.filePath << ':' << occurrence.startLine << '\n';
+        for (const auto& group : GroupOccurrencesByFile(change.occurrences)) {
+            out << "    " << group.filePath << ':';
+            WriteCommaSeparated(out, group.startLines);
+            out << '\n';
         }
     }
 
@@ -250,11 +323,9 @@ void OutputRenderer::RenderText(std::ostream& out) const {
     }
 }
 
-void OutputRenderer::RenderMarkdown(std::ostream& out) const {
-    const ChangeSelection& selection = filtered_;
+void OutputRenderer::RenderMarkdown(std::ostream& out, const ChangeSelection& selection) const {
     const TokenInterner& interner = interner_;
-    out << "## Compressed diff summary\n\n"
-        << "**" << selection.commonChanges.size() << " common change(s), " << selection.uniqueLines.size()
+    out << "**" << selection.commonChanges.size() << " common change(s), " << selection.uniqueLines.size()
         << " unique line(s).**\n";
 
     for (std::size_t i = 0; i < selection.commonChanges.size(); ++i) {
@@ -265,8 +336,10 @@ void OutputRenderer::RenderMarkdown(std::ostream& out) const {
             out << interner.TextFor(token) << '\n';
         }
         out << "```\n\n**Occurrences:**\n\n";
-        for (const auto& occurrence : change.occurrences) {
-            out << "- `" << occurrence.filePath << ':' << occurrence.startLine << "`\n";
+        for (const auto& group : GroupOccurrencesByFile(change.occurrences)) {
+            out << "- `" << group.filePath << ':';
+            WriteCommaSeparated(out, group.startLines);
+            out << "`\n";
         }
     }
 
@@ -292,79 +365,58 @@ void OutputRenderer::RenderMarkdown(std::ostream& out) const {
 //   "uniqueChanges": [{"filePath":...,
 //     "hunks":[{"oldStart":N,"oldCount":N,"newStart":N,"newCount":N,"lines":[...]}, ...]}, ...]
 // }
-void OutputRenderer::RenderJson(std::ostream& out) const {
-    const ChangeSelection& selection = filtered_;
+void OutputRenderer::RenderJson(std::ostream& out, const ChangeSelection& selection) const {
     const TokenInterner& interner = interner_;
     out << "{\n";
 
-    out << "  \"commonChanges\": [";
-    for (std::size_t i = 0; i < selection.commonChanges.size(); ++i) {
-        out << (i == 0 ? "\n" : ",\n") << "    {\n";
+    out << "  \"commonChanges\": ";
+    WriteJsonArray(out, selection.commonChanges.size(), "    ", "  ", [&](std::size_t i) {
         const auto& change = selection.commonChanges[i];
+        out << "{\n";
         out << "      \"length\": " << change.tokens.size() << ",\n";
         out << "      \"occurrenceCount\": " << change.occurrences.size() << ",\n";
-        out << "      \"lines\": [";
-        for (std::size_t k = 0; k < change.tokens.size(); ++k) {
-            out << (k == 0 ? "\n" : ",\n") << "        ";
+        out << "      \"lines\": ";
+        WriteJsonArray(out, change.tokens.size(), "        ", "      ", [&](std::size_t k) {
             AppendJsonString(out, interner.TextFor(change.tokens[k]));
-        }
-        if (!change.tokens.empty()) {
-            out << "\n      ";
-        }
-        out << "],\n";
-        out << "      \"occurrences\": [";
-        for (std::size_t k = 0; k < change.occurrences.size(); ++k) {
+        });
+        out << ",\n";
+        out << "      \"occurrences\": ";
+        WriteJsonArray(out, change.occurrences.size(), "        ", "      ", [&](std::size_t k) {
             const auto& occurrence = change.occurrences[k];
-            out << (k == 0 ? "\n" : ",\n") << "        {\n";
+            out << "{\n";
             out << "          \"filePath\": ";
             AppendJsonString(out, occurrence.filePath);
             out << ",\n          \"startLine\": " << occurrence.startLine << "\n        }";
-        }
-        if (!change.occurrences.empty()) {
-            out << "\n      ";
-        }
-        out << "]\n    }";
-    }
-    if (!selection.commonChanges.empty()) {
-        out << "\n  ";
-    }
-    out << "],\n";
+        });
+        out << "\n    }";
+    });
+    out << ",\n";
 
     const auto groups = GroupByFile(selection.uniqueLines);
-    out << "  \"uniqueChanges\": [";
-    for (std::size_t i = 0; i < groups.size(); ++i) {
+    out << "  \"uniqueChanges\": ";
+    WriteJsonArray(out, groups.size(), "    ", "  ", [&](std::size_t i) {
         const auto& group = groups[i];
-        out << (i == 0 ? "\n" : ",\n") << "    {\n";
+        out << "{\n";
         out << "      \"filePath\": ";
         AppendJsonString(out, group.filePath);
-        out << ",\n      \"hunks\": [";
+        out << ",\n      \"hunks\": ";
         const auto hunks = BuildHunks(group.lines, interner);
-        for (std::size_t h = 0; h < hunks.size(); ++h) {
+        WriteJsonArray(out, hunks.size(), "        ", "      ", [&](std::size_t h) {
             const auto& hunk = hunks[h];
-            out << (h == 0 ? "\n" : ",\n") << "        {\n";
+            out << "{\n";
             out << "          \"oldStart\": " << hunk.oldStart << ",\n";
             out << "          \"oldCount\": " << hunk.oldCount << ",\n";
             out << "          \"newStart\": " << hunk.newStart << ",\n";
             out << "          \"newCount\": " << hunk.newCount << ",\n";
-            out << "          \"lines\": [";
-            for (std::size_t k = 0; k < hunk.lineTexts.size(); ++k) {
-                out << (k == 0 ? "\n" : ",\n") << "            ";
+            out << "          \"lines\": ";
+            WriteJsonArray(out, hunk.lineTexts.size(), "            ", "          ", [&](std::size_t k) {
                 AppendJsonString(out, hunk.lineTexts[k]);
-            }
-            if (!hunk.lineTexts.empty()) {
-                out << "\n          ";
-            }
-            out << "]\n        }";
-        }
-        if (!hunks.empty()) {
-            out << "\n      ";
-        }
-        out << "]\n    }";
-    }
-    if (!groups.empty()) {
-        out << "\n  ";
-    }
-    out << "]\n";
+            });
+            out << "\n        }";
+        });
+        out << "\n    }";
+    });
+    out << "\n";
 
     out << "}\n";
 }
