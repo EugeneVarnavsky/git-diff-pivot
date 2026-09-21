@@ -35,8 +35,32 @@ jobs:
             exit 1
           fi
 
-  build:
+  resolve-version:
+    name: Resolve version
     needs: check-npm-token
+    uses: ./.github/workflows/resolve-version.yml
+
+  check-not-published:
+    name: Check version not already published
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify git-diff-pivot@${{ needs.resolve-version.outputs.version }} is not already on npm
+        run: |
+          version="${{ needs.resolve-version.outputs.version }}"
+          published="$(npm view git-diff-pivot@"$version" version 2>/dev/null || true)"
+          if [ -n "$published" ]; then
+            echo "::error::git-diff-pivot@$version is already published to npm."
+            exit 1
+          fi
+
+  build:
+    needs: check-not-published
     uses: ./.github/workflows/build-native-binaries.yml
 
   prepare:
