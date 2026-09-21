@@ -1,0 +1,78 @@
+name: Publish GitHub release
+
+# Reusable workflow: downloads the per-platform build artifacts produced by
+# build-native-binaries.yml (git-diff-pivot-<platform>, each containing the
+# staged binary and package.json) and publishes them as assets of a GitHub
+# release for the given version, using the GitHub CLI already present on
+# the runner. Release notes are the matching CHANGELOG.md section.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to release (without leading "v"); used as the release tag.
+        required: true
+        type: string
+
+jobs:
+  publish-release:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout CHANGELOG.md
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ inputs.version }}
+          sparse-checkout: |
+            CHANGELOG.md
+          sparse-checkout-cone-mode: false
+
+      - name: Download win32-x64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: git-diff-pivot-win32-x64
+          path: release/win32-x64
+
+      - name: Download linux-x64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: git-diff-pivot-linux-x64
+          path: release/linux-x64
+
+      - name: Download darwin-arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: git-diff-pivot-darwin-arm64
+          path: release/darwin-arm64
+
+      - name: Stage release assets
+        run: |
+          mkdir -p release/assets
+          cp release/win32-x64/git-diff-pivot.exe release/assets/git-diff-pivot-win32-x64.exe
+          cp release/linux-x64/git-diff-pivot release/assets/git-diff-pivot-linux-x64
+          cp release/darwin-arm64/git-diff-pivot release/assets/git-diff-pivot-darwin-arm64
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          version="${{ inputs.version }}"
+          awk -v ver="$version" '
+            /^## / { in_section = ($0 == "## " ver); next }
+            in_section { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::No CHANGELOG.md section found for version $version (expected a '## $version' heading)."
+            exit 1
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ inputs.version }}" \
+            release/assets/git-diff-pivot-win32-x64.exe \
+            release/assets/git-diff-pivot-linux-x64 \
+            release/assets/git-diff-pivot-darwin-arm64 \
+            --title "v${{ inputs.version }}" \
+            --notes-file release-notes.md

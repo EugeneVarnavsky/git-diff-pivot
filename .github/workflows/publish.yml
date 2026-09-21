@@ -68,7 +68,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: read
     steps:
       - name: Checkout
@@ -125,30 +124,6 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-      - name: Delete per-platform build artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const names = new Set([
-              'git-diff-pivot-win32-x64',
-              'git-diff-pivot-linux-x64',
-              'git-diff-pivot-darwin-arm64',
-            ]);
-            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-            });
-            for (const artifact of data.artifacts) {
-              if (names.has(artifact.name)) {
-                await github.rest.actions.deleteArtifact({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  artifact_id: artifact.id,
-                });
-              }
-            }
-
   publish-platform-packages:
     name: Publish (${{ matrix.platform }})
     needs: prepare
@@ -204,3 +179,45 @@ jobs:
         run: npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-github-release:
+    name: Publish GitHub release
+    needs: [build, publish-main-package]
+    if: ${{ !inputs.dry_run }}
+    uses: ./.github/workflows/publish-github-release.yml
+    permissions:
+      contents: write
+    with:
+      version: ${{ needs.build.outputs.version }}
+
+  cleanup-build-artifacts:
+    name: Delete build artifacts
+    needs: publish-github-release
+    if: always() && needs.publish-main-package.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete per-platform build artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const names = new Set([
+              'git-diff-pivot-win32-x64',
+              'git-diff-pivot-linux-x64',
+              'git-diff-pivot-darwin-arm64',
+            ]);
+            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            for (const artifact of data.artifacts) {
+              if (names.has(artifact.name)) {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+              }
+            }
