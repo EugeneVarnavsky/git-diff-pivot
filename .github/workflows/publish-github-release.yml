@@ -24,9 +24,8 @@ jobs:
       - name: Checkout CHANGELOG.md
         uses: actions/checkout@v4
         with:
-          ref: v${{ inputs.version }}
           sparse-checkout: |
-            CHANGELOG.md
+            /CHANGELOG.md
           sparse-checkout-cone-mode: false
 
       - name: Download win32-x64 binary
