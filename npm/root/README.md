@@ -26,6 +26,7 @@ git-diff-pivot [options] [file]
   --output <path>        Write output to this file instead of stdout
   --output-type <type>   Output format: txt, md, or json (default: txt, or
                          inferred from --output's file extension)
+  --txt, --md, --json    Shorthand for --output-type txt/md/json
   -h, --help             Show this help message
   -v, --version          Show the product version
 ```
