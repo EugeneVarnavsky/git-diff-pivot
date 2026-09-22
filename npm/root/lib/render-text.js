@@ -1,8 +1,8 @@
 'use strict';
 
 // Mirrors OutputRenderer::RenderText (src/git_diff_pivot/output_renderer.cpp):
-// each common change once with every occurrence's file/line, followed by
-// unique lines grouped by file, each hunk starting with a git-style
+// each common change once with every occurrence's file/lines grouped, followed
+// by unique lines grouped by file, each hunk starting with a git-style
 // "@@ -oldStart,oldCount +newStart,newCount @@" header.
 // Operates on the parsed `--output-type json` result shape.
 
@@ -29,18 +29,18 @@ function jsonToText(result) {
   const parts = [`${commonChanges.length} common change(s), ${countUniqueLines(uniqueChanges)} unique line(s).\n`];
 
   commonChanges.forEach((change, index) => {
-    parts.push(`\nCommon change ${index + 1} (${change.occurrenceCount} occurrence(s), ${change.lines.length} line(s)):\n`);
+    parts.push(`\nCommon change ${index + 1}:\n`);
     for (const line of change.lines) {
       parts.push(`  ${line}\n`);
     }
-    parts.push('  Occurrences:\n');
+    parts.push(`\n  ${change.occurrenceCount} occurrences:\n`);
     for (const occurrence of change.occurrences) {
-      parts.push(`    ${occurrence.filePath}:${occurrence.startLine}\n`);
+      parts.push(`    ${occurrence.filePath}: [${occurrence.startLine.join(', ')}]\n`);
     }
   });
 
   if (uniqueChanges.length > 0) {
-    parts.push('\nUnique changes:');
+    parts.push('\nUnique changes:\n');
     for (const group of uniqueChanges) {
       parts.push(`\n${group.filePath}:\n`);
       group.hunks.forEach((hunk, hunkIndex) => {

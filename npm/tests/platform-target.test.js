@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { getPlatformTarget } = require('../../lib/platform-target');
+const { getPlatformTarget } = require('../root/lib/platform-target');
 
 test('maps win32/x64 to the Windows platform package and .exe binary', () => {
   assert.deepEqual(getPlatformTarget('win32', 'x64'), {

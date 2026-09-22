@@ -159,9 +159,11 @@ std::vector<FileOccurrences> GroupOccurrencesByFile(
 
 // Writes `values` comma-separated, with no leading/trailing separator.
 void WriteCommaSeparated(std::ostream& out, const std::vector<std::uint32_t>& values) {
+    out << '[';
     for (std::size_t k = 0; k < values.size(); ++k) {
-        out << (k == 0 ? "" : ",") << values[k];
+        out << (k == 0 ? "" : ", ") << values[k];
     }
+    out << ']';
 }
 
 // A changed line's interned text carries its diff operation as a leading
@@ -292,21 +294,20 @@ void OutputRenderer::RenderText(std::ostream& out, const ChangeSelection& select
 
     for (std::size_t i = 0; i < selection.commonChanges.size(); ++i) {
         const auto& change = selection.commonChanges[i];
-        out << "\nCommon change " << (i + 1) << " (" << change.occurrences.size() << " occurrence(s), "
-            << change.tokens.size() << " line(s)):\n";
+        out << "\nCommon change " << (i + 1) << ":\n";
         for (const auto token : change.tokens) {
             out << "  " << interner.TextFor(token) << '\n';
         }
-        out << "  Occurrences:\n";
+        out << "\n  " << change.occurrences.size() << " occurrences:\n";
         for (const auto& group : GroupOccurrencesByFile(change.occurrences)) {
-            out << "    " << group.filePath << ':';
+            out << "    " << group.filePath << ": ";
             WriteCommaSeparated(out, group.startLines);
             out << '\n';
         }
     }
 
     if (!selection.uniqueLines.empty()) {
-        out << "\nUnique changes:";
+        out << "\nUnique changes:\n";
         for (const auto& group : GroupByFile(selection.uniqueLines)) {
             out << "\n" << group.filePath << ":\n";
             const auto hunks = BuildHunks(group.lines, interner);
@@ -330,17 +331,17 @@ void OutputRenderer::RenderMarkdown(std::ostream& out, const ChangeSelection& se
 
     for (std::size_t i = 0; i < selection.commonChanges.size(); ++i) {
         const auto& change = selection.commonChanges[i];
-        out << "\n### Common change " << (i + 1) << " (" << change.occurrences.size() << " occurrence(s), "
-            << change.tokens.size() << " line(s))\n\n```diff\n";
+        out << "\n### Common change " << (i + 1) << "\n\n```diff\n";
         for (const auto token : change.tokens) {
             out << interner.TextFor(token) << '\n';
         }
-        out << "```\n\n**Occurrences:**\n\n";
+        out << "```\n\n<details>\n<summary>" << change.occurrences.size() << " occurrences</summary>\n\n";
         for (const auto& group : GroupOccurrencesByFile(change.occurrences)) {
-            out << "- `" << group.filePath << ':';
+            out << "- " << group.filePath << ": ";
             WriteCommaSeparated(out, group.startLines);
-            out << "`\n";
+            out << "\n";
         }
+        out << "\n</details>\n";
     }
 
     if (!selection.uniqueLines.empty()) {
@@ -361,7 +362,7 @@ void OutputRenderer::RenderMarkdown(std::ostream& out, const ChangeSelection& se
 // Pretty-printed JSON shape (2-space indent, matching e.g. JSON.stringify(x, null, 2)):
 // {
 //   "commonChanges": [{"length":N,"occurrenceCount":N,"lines":[...],
-//     "occurrences":[{"filePath":...,"startLine":N}, ...]}, ...],
+//     "occurrences":[{"filePath":...,"startLine":[N, ...]}, ...]}, ...],
 //   "uniqueChanges": [{"filePath":...,
 //     "hunks":[{"oldStart":N,"oldCount":N,"newStart":N,"newCount":N,"lines":[...]}, ...]}, ...]
 // }
@@ -381,12 +382,17 @@ void OutputRenderer::RenderJson(std::ostream& out, const ChangeSelection& select
         });
         out << ",\n";
         out << "      \"occurrences\": ";
-        WriteJsonArray(out, change.occurrences.size(), "        ", "      ", [&](std::size_t k) {
-            const auto& occurrence = change.occurrences[k];
+        const auto occurrenceGroups = GroupOccurrencesByFile(change.occurrences);
+        WriteJsonArray(out, occurrenceGroups.size(), "        ", "      ", [&](std::size_t k) {
+            const auto& group = occurrenceGroups[k];
             out << "{\n";
             out << "          \"filePath\": ";
-            AppendJsonString(out, occurrence.filePath);
-            out << ",\n          \"startLine\": " << occurrence.startLine << "\n        }";
+            AppendJsonString(out, group.filePath);
+            out << ",\n          \"startLine\": ";
+            WriteJsonArray(out, group.startLines.size(), "            ", "          ", [&](std::size_t j) {
+                out << group.startLines[j];
+            });
+            out << "\n        }";
         });
         out << "\n    }";
     });

@@ -80,6 +80,7 @@ TEST_CASE("OutputRenderer renders unique lines grouped by file with no common-ch
             "0 common change(s), 2 unique line(s).\n"
             "\n"
             "Unique changes:\n"
+            "\n"
             "FileA:\n"
             "  @@ -0,0 +1 @@\n"
             "  A\n"
@@ -107,12 +108,13 @@ TEST_CASE("OutputRenderer renders a common change section with no unique lines",
     REQUIRE(RenderToString(selection, interner) ==
             "1 common change(s), 0 unique line(s).\n"
             "\n"
-            "Common change 1 (2 occurrence(s), 2 line(s)):\n"
+            "Common change 1:\n"
             "  A\n"
             "  B\n"
-            "  Occurrences:\n"
-            "    FileA:1\n"
-            "    FileB:5\n");
+            "\n"
+            "  2 occurrences:\n"
+            "    FileA: [1]\n"
+            "    FileB: [5]\n");
 }
 
 TEST_CASE("OutputRenderer groups repeated occurrences in the same file under one path in text and Markdown",
@@ -135,25 +137,29 @@ TEST_CASE("OutputRenderer groups repeated occurrences in the same file under one
     REQUIRE(RenderToString(selection, interner) ==
             "1 common change(s), 0 unique line(s).\n"
             "\n"
-            "Common change 1 (4 occurrence(s), 1 line(s)):\n"
+            "Common change 1:\n"
             "  A\n"
-            "  Occurrences:\n"
-            "    FileA:1,10,20\n"
-            "    FileB:5\n");
+            "\n"
+            "  4 occurrences:\n"
+            "    FileA: [1, 10, 20]\n"
+            "    FileB: [5]\n");
 
     REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
             "**1 common change(s), 0 unique line(s).**\n"
             "\n"
-            "### Common change 1 (4 occurrence(s), 1 line(s))\n"
+            "### Common change 1\n"
             "\n"
             "```diff\n"
             "A\n"
             "```\n"
             "\n"
-            "**Occurrences:**\n"
+            "<details>\n"
+            "<summary>4 occurrences</summary>\n"
             "\n"
-            "- `FileA:1,10,20`\n"
-            "- `FileB:5`\n");
+            "- FileA: [1, 10, 20]\n"
+            "- FileB: [5]\n"
+            "\n"
+            "</details>\n");
 }
 
 TEST_CASE("OutputRenderer produces the expected compressed output for the canonical fixture",
@@ -173,16 +179,18 @@ TEST_CASE("OutputRenderer produces the expected compressed output for the canoni
     REQUIRE(RenderToString(selection, interner) ==
             "1 common change(s), 3 unique line(s).\n"
             "\n"
-            "Common change 1 (3 occurrence(s), 3 line(s)):\n"
+            "Common change 1:\n"
             "  A\n"
             "  B\n"
             "  C\n"
-            "  Occurrences:\n"
-            "    FileA:1\n"
-            "    FileB:1\n"
-            "    FileC:2\n"
+            "\n"
+            "  3 occurrences:\n"
+            "    FileA: [1]\n"
+            "    FileB: [1]\n"
+            "    FileC: [2]\n"
             "\n"
             "Unique changes:\n"
+            "\n"
             "FileA:\n"
             "  @@ -0,0 +4 @@\n"
             "  D\n"
@@ -221,7 +229,7 @@ TEST_CASE("OutputRenderer renders Markdown for the canonical fixture", "[output-
     REQUIRE(RenderToString(selection, interner, OutputFormat::Markdown) ==
             "**1 common change(s), 3 unique line(s).**\n"
             "\n"
-            "### Common change 1 (3 occurrence(s), 3 line(s))\n"
+            "### Common change 1\n"
             "\n"
             "```diff\n"
             "A\n"
@@ -229,11 +237,14 @@ TEST_CASE("OutputRenderer renders Markdown for the canonical fixture", "[output-
             "C\n"
             "```\n"
             "\n"
-            "**Occurrences:**\n"
+            "<details>\n"
+            "<summary>3 occurrences</summary>\n"
             "\n"
-            "- `FileA:1`\n"
-            "- `FileB:1`\n"
-            "- `FileC:2`\n"
+            "- FileA: [1]\n"
+            "- FileB: [1]\n"
+            "- FileC: [2]\n"
+            "\n"
+            "</details>\n"
             "\n"
             "### Unique changes\n"
             "\n"
@@ -286,15 +297,21 @@ TEST_CASE("OutputRenderer renders JSON for the canonical fixture", "[output-rend
             "      \"occurrences\": [\n"
             "        {\n"
             "          \"filePath\": \"FileA\",\n"
-            "          \"startLine\": 1\n"
+            "          \"startLine\": [\n"
+            "            1\n"
+            "          ]\n"
             "        },\n"
             "        {\n"
             "          \"filePath\": \"FileB\",\n"
-            "          \"startLine\": 1\n"
+            "          \"startLine\": [\n"
+            "            1\n"
+            "          ]\n"
             "        },\n"
             "        {\n"
             "          \"filePath\": \"FileC\",\n"
-            "          \"startLine\": 2\n"
+            "          \"startLine\": [\n"
+            "            2\n"
+            "          ]\n"
             "        }\n"
             "      ]\n"
             "    }\n"
@@ -384,6 +401,7 @@ TEST_CASE("OutputRenderer omits a common change and unique lines that are entire
             "0 common change(s), 1 unique line(s).\n"
             "\n"
             "Unique changes:\n"
+            "\n"
             "FileA:\n"
             "  @@ -0,0 +6 @@\n"
             "  A\n");
@@ -408,12 +426,13 @@ TEST_CASE("OutputRenderer keeps a common change that mixes blank and non-blank l
     REQUIRE(RenderToString(selection, interner) ==
             "1 common change(s), 0 unique line(s).\n"
             "\n"
-            "Common change 1 (2 occurrence(s), 2 line(s)):\n"
+            "Common change 1:\n"
             "  +\n"
             "  +content\n"
-            "  Occurrences:\n"
-            "    FileA:1\n"
-            "    FileB:1\n");
+            "\n"
+            "  2 occurrences:\n"
+            "    FileA: [1]\n"
+            "    FileB: [1]\n");
 }
 
 TEST_CASE("OutputRenderer omits blank-only changes from Markdown and JSON output",
@@ -494,6 +513,7 @@ TEST_CASE("OutputRenderer separates unique lines from different original hunks w
             "0 common change(s), 3 unique line(s).\n"
             "\n"
             "Unique changes:\n"
+            "\n"
             "FileA:\n"
             "  @@ -0,0 +1,2 @@\n"
             "  A\n"

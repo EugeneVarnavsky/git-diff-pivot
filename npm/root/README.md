@@ -57,17 +57,20 @@ diff --git a/src/bar.py b/src/bar.py
 ````markdown
 **1 common change(s), 3 unique line(s).**
 
-### Common change 1 (2 occurrence(s), 2 line(s))
+### Common change 1
 
 ```diff
 +import logging
 +logger = logging.getLogger(__name__)
 ```
 
-**Occurrences:**
+<details>
+<summary>2 occurrences</summary>
 
-- `src/foo.py:1`
-- `src/bar.py:1`
+- src/foo.py: [1]
+- src/bar.py: [1]
+
+</details>
 
 ### Unique changes
 
