@@ -95,3 +95,14 @@ TEST_CASE("ParseCliOptions honors --output-type without --output, affecting only
     REQUIRE_FALSE(options.outputPath.has_value());
     REQUIRE(options.outputFormat == OutputFormat::Markdown);
 }
+
+TEST_CASE("ParseCliOptions accepts --txt/--md/--json as shorthand for --output-type", "[cli-options]") {
+    REQUIRE(ParseCliOptions({"--txt"}).outputFormat == OutputFormat::Text);
+    REQUIRE(ParseCliOptions({"--md"}).outputFormat == OutputFormat::Markdown);
+    REQUIRE(ParseCliOptions({"--json"}).outputFormat == OutputFormat::Json);
+}
+
+TEST_CASE("ParseCliOptions lets --txt/--md/--json override the inferred --output extension", "[cli-options]") {
+    const CliOptions options = ParseCliOptions({"--output", "out.txt", "--json"});
+    REQUIRE(options.outputFormat == OutputFormat::Json);
+}

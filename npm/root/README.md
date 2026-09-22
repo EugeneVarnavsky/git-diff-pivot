@@ -26,6 +26,7 @@ git-diff-pivot [options] [file]
   --output <path>        Write output to this file instead of stdout
   --output-type <type>   Output format: txt, md, or json (default: txt, or
                          inferred from --output's file extension)
+  --txt, --md, --json    Shorthand for --output-type txt/md/json
   -h, --help             Show this help message
   -v, --version          Show the product version
 ```
@@ -55,21 +56,22 @@ diff --git a/src/bar.py b/src/bar.py
 `git-diff-pivot --output-type md` renders the repeated two-line change once, with both occurrences listed, followed by each file's unique lines — including `return 42`, which appears in only one file and is therefore never treated as a repeated change:
 
 ````markdown
-## Compressed diff summary
-
 **1 common change(s), 3 unique line(s).**
 
-### Common change 1 (2 occurrence(s), 2 line(s))
+### Common change 1
 
 ```diff
 +import logging
 +logger = logging.getLogger(__name__)
 ```
 
-**Occurrences:**
+<details>
+<summary>2 occurrences</summary>
 
-- `src/foo.py:1`
-- `src/bar.py:1`
+- src/foo.py: [1]
+- src/bar.py: [1]
+
+</details>
 
 ### Unique changes
 

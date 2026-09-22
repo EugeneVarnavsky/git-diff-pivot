@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { jsonToText } = require('../../lib/render-text');
+const { jsonToText } = require('../root/lib/render-text');
 
 test('renders an empty result as zero counts and no sections', () => {
   assert.equal(jsonToText({ commonChanges: [], uniqueChanges: [] }), '0 common change(s), 0 unique line(s).\n');
@@ -16,9 +16,9 @@ test('renders the canonical fixture the same way OutputRenderer::RenderText does
         occurrenceCount: 3,
         lines: ['A', 'B', 'C'],
         occurrences: [
-          { filePath: 'FileA', startLine: 1 },
-          { filePath: 'FileB', startLine: 1 },
-          { filePath: 'FileC', startLine: 2 },
+          { filePath: 'FileA', startLine: [1] },
+          { filePath: 'FileB', startLine: [1] },
+          { filePath: 'FileC', startLine: [2] },
         ],
       },
     ],
@@ -33,16 +33,18 @@ test('renders the canonical fixture the same way OutputRenderer::RenderText does
     jsonToText(result),
     '1 common change(s), 3 unique line(s).\n' +
       '\n' +
-      'Common change 1 (3 occurrence(s), 3 line(s)):\n' +
+      'Common change 1:\n' +
       '  A\n' +
       '  B\n' +
       '  C\n' +
-      '  Occurrences:\n' +
-      '    FileA:1\n' +
-      '    FileB:1\n' +
-      '    FileC:2\n' +
+      '\n' +
+      '  3 occurrences:\n' +
+      '    FileA: [1]\n' +
+      '    FileB: [1]\n' +
+      '    FileC: [2]\n' +
       '\n' +
       'Unique changes:\n' +
+      '\n' +
       'FileA:\n' +
       '  @@ -0,0 +4 @@\n' +
       '  D\n' +
@@ -76,6 +78,7 @@ test('separates unique lines from different original hunks with a git-style hunk
     '0 common change(s), 3 unique line(s).\n' +
       '\n' +
       'Unique changes:\n' +
+      '\n' +
       'FileA:\n' +
       '  @@ -0,0 +1,2 @@\n' +
       '  A\n' +

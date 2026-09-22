@@ -3,7 +3,7 @@
 
 export interface GitDiffPivotOccurrence {
   filePath: string;
-  startLine: number;
+  startLine: number[];
 }
 
 export interface GitDiffPivotCommonChange {

@@ -25,11 +25,13 @@ struct CliOptions {
 
 // Parses git-diff-pivot CLI arguments (`args` excludes argv[0]) into a CliOptions
 // struct. Flag values may follow as a separate argument or via `--flag=value`.
-// When --output is given without --output-type, the format is inferred from
+// --txt/--md/--json are shorthand for --output-type txt/md/json. When --output
+// is given without --output-type (or a shorthand), the format is inferred from
 // the --output path's extension (matching ParseOutputFormat's txt/md/json
-// values); an unrecognized extension is an error. When --output-type is given
-// without --output, it only selects the stdout rendering format. Throws
-// std::invalid_argument describing the first invalid argument encountered.
+// values); an unrecognized extension is an error. When --output-type (or a
+// shorthand) is given without --output, it only selects the stdout rendering
+// format. Throws std::invalid_argument describing the first invalid argument
+// encountered.
 [[nodiscard]] CliOptions ParseCliOptions(const std::vector<std::string>& args);
 
 }  // namespace git_diff_pivot

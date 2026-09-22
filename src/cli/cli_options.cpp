@@ -61,6 +61,11 @@ CliOptions ParseCliOptions(const std::vector<std::string>& args) {
             options.versionRequested = true;
             return options;
         }
+        if (arg == "--txt" || arg == "--md" || arg == "--json") {
+            options.outputFormat = *ParseOutputFormat(arg.substr(2));
+            outputTypeExplicit = true;
+            continue;
+        }
 
         const auto [flag, inlineValue] = SplitFlagValue(arg);
         const bool needsValue =

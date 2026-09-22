@@ -25,7 +25,8 @@ const diffText =
 
 test('diffToText runs the real native binary and renders the compressed diff', async () => {
   const rendered = await diffToText(diffText);
-  assert.match(rendered, /Common change 1 \(2 occurrence\(s\), 1 line\(s\)\)/);
+  assert.match(rendered, /Common change 1:/);
+  assert.match(rendered, /2 occurrences:/);
   assert.match(rendered, /\+int result = 0;/);
   assert.match(rendered, /\+\/\/ alpha-specific line/);
   assert.match(rendered, /\+\/\/ beta-specific line/);

@@ -26,6 +26,7 @@ void PrintUsage() {
                  "  --output <path>        Write output to this file instead of stdout\n"
                  "  --output-type <type>   Output format: txt, md, or json (default: txt, or\n"
                  "                         inferred from --output's file extension)\n"
+                 "  --txt, --md, --json    Shorthand for --output-type txt/md/json\n"
                  "  -h, --help             Show this help message\n"
                  "  -v, --version          Show the product version\n";
 }

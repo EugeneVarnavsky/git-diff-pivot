@@ -2,12 +2,12 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { jsonToMarkdown } = require('../../lib/render-markdown');
+const { jsonToMarkdown } = require('../root/lib/render-markdown');
 
 test('renders an empty result as zero counts and no sections', () => {
   assert.equal(
     jsonToMarkdown({ commonChanges: [], uniqueChanges: [] }),
-    '## Compressed diff summary\n\n**0 common change(s), 0 unique line(s).**\n'
+    '**0 common change(s), 0 unique line(s).**\n'
   );
 });
 
@@ -19,9 +19,9 @@ test('renders the canonical fixture the same way OutputRenderer::RenderMarkdown 
         occurrenceCount: 3,
         lines: ['A', 'B', 'C'],
         occurrences: [
-          { filePath: 'FileA', startLine: 1 },
-          { filePath: 'FileB', startLine: 1 },
-          { filePath: 'FileC', startLine: 2 },
+          { filePath: 'FileA', startLine: [1] },
+          { filePath: 'FileB', startLine: [1] },
+          { filePath: 'FileC', startLine: [2] },
         ],
       },
     ],
@@ -34,11 +34,9 @@ test('renders the canonical fixture the same way OutputRenderer::RenderMarkdown 
 
   assert.equal(
     jsonToMarkdown(result),
-    '## Compressed diff summary\n' +
+    '**1 common change(s), 3 unique line(s).**\n' +
       '\n' +
-      '**1 common change(s), 3 unique line(s).**\n' +
-      '\n' +
-      '### Common change 1 (3 occurrence(s), 3 line(s))\n' +
+      '### Common change 1\n' +
       '\n' +
       '```diff\n' +
       'A\n' +
@@ -46,11 +44,14 @@ test('renders the canonical fixture the same way OutputRenderer::RenderMarkdown 
       'C\n' +
       '```\n' +
       '\n' +
-      '**Occurrences:**\n' +
+      '<details>\n' +
+      '<summary>3 occurrences</summary>\n' +
       '\n' +
-      '- `FileA:1`\n' +
-      '- `FileB:1`\n' +
-      '- `FileC:2`\n' +
+      '- FileA: [1]\n' +
+      '- FileB: [1]\n' +
+      '- FileC: [2]\n' +
+      '\n' +
+      '</details>\n' +
       '\n' +
       '### Unique changes\n' +
       '\n' +
@@ -93,9 +94,7 @@ test('separates unique lines from different original hunks with a git-style hunk
 
   assert.equal(
     jsonToMarkdown(result),
-    '## Compressed diff summary\n' +
-      '\n' +
-      '**0 common change(s), 3 unique line(s).**\n' +
+    '**0 common change(s), 3 unique line(s).**\n' +
       '\n' +
       '### Unique changes\n' +
       '\n' +

@@ -217,7 +217,7 @@ TEST_CASE("Pipeline integration: a common change consisting only of blank lines 
 
     CHECK(RenderToString(selection, interner) == "0 common change(s), 0 unique line(s).\n");
     CHECK(RenderToString(selection, interner, git_diff_pivot::OutputFormat::Markdown) ==
-          "## Compressed diff summary\n\n**0 common change(s), 0 unique line(s).**\n");
+          "**0 common change(s), 0 unique line(s).**\n");
     CHECK(RenderToString(selection, interner, git_diff_pivot::OutputFormat::Json) ==
           "{\n"
           "  \"commonChanges\": [],\n"
@@ -355,6 +355,7 @@ TEST_CASE("Pipeline integration: unique-change hunk header uses actual old/new l
           "0 common change(s), 3 unique line(s).\n"
           "\n"
           "Unique changes:\n"
+          "\n"
           "src/one.cpp:\n"
           "  @@ -6 +6,2 @@\n"
           "  -old line\n"
@@ -386,6 +387,7 @@ TEST_CASE("Pipeline integration: unique-change hunk header falls back to the hun
           "0 common change(s), 2 unique line(s).\n"
           "\n"
           "Unique changes:\n"
+          "\n"
           "src/two.cpp:\n"
           "  @@ -11,0 +11,2 @@\n"
           "  +added1\n"
