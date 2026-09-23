@@ -179,3 +179,76 @@ TEST_CASE("ChangeSelector integrates with RepeatedChangeDetector on the canonica
         REQUIRE(unique.line.token != selection.commonChanges.front().tokens[0]);
     }
 }
+
+TEST_CASE("ChangeSelector keeps a long repeat whole instead of letting a shorter, more frequent "
+          "sub-sequence it contains fragment it",
+          "[change-selector][fixture][regression]") {
+    // Regression test for "Invalid common change detection": "B" alone repeats more often
+    // (5 occurrences) than "A B C" (2 occurrences), which would give it a higher gain, but
+    // "A B C" is the longer sequence and must still be kept as one common change instead of
+    // being fragmented into "A", "B", and "C". "B"'s 3 extra standalone occurrences must still
+    // surface as their own (narrower) common change.
+    TokenInterner interner;
+    DiffDocument document;
+    document.AddHunk(MakeHunk(interner, "FileA", {"A", "B", "C"}));
+    document.AddHunk(MakeHunk(interner, "FileB", {"A", "B", "C"}));
+    document.AddHunk(MakeHunk(interner, "FileExtra", {"B"}));
+    document.AddHunk(MakeHunk(interner, "FileExtra", {"B"}));
+    document.AddHunk(MakeHunk(interner, "FileExtra", {"B"}));
+
+    RepeatedChangeDetector detector;
+    const auto candidates = detector.Detect(document);
+
+    ChangeSelector selector;
+    const auto selection = selector.Select(document, candidates);
+
+    REQUIRE(selection.uniqueLines.empty());
+    REQUIRE(selection.commonChanges.size() == 2);
+
+    const auto changeABC = std::find_if(selection.commonChanges.begin(), selection.commonChanges.end(),
+                                         [](const RepeatedSequence& sequence) { return sequence.tokens.size() == 3; });
+    const auto changeB = std::find_if(selection.commonChanges.begin(), selection.commonChanges.end(),
+                                       [](const RepeatedSequence& sequence) { return sequence.tokens.size() == 1; });
+    REQUIRE(changeABC != selection.commonChanges.end());
+    REQUIRE(changeB != selection.commonChanges.end());
+    REQUIRE(changeABC->occurrences.size() == 2);
+    REQUIRE(changeB->tokens.front() == interner.Intern("B"));
+    REQUIRE(changeB->occurrences.size() == 3);
+}
+
+TEST_CASE("ChangeSelector keeps a duplicated hunk whole even when its first line also repeats "
+          "standalone elsewhere",
+          "[change-selector][fixture][regression]") {
+    // Same "Invalid common change detection" scenario, shaped like the original report: two
+    // files share an identical 4-line hunk ("A B C D"), and "A" alone also appears in three
+    // unrelated single-line hunks (like "line1" recurring by itself elsewhere in the diff).
+    // The shared hunk must stay one 4-line common change; only "A"'s 3 standalone occurrences
+    // should form a separate, narrower common change.
+    TokenInterner interner;
+    DiffDocument document;
+    document.AddHunk(MakeHunk(interner, "FileA", {"A", "B", "C", "D"}));
+    document.AddHunk(MakeHunk(interner, "FileB", {"A", "B", "C", "D"}));
+    document.AddHunk(MakeHunk(interner, "FileExtra", {"A"}));
+    document.AddHunk(MakeHunk(interner, "FileExtra", {"A"}));
+    document.AddHunk(MakeHunk(interner, "FileExtra", {"A"}));
+
+    RepeatedChangeDetector detector;
+    const auto candidates = detector.Detect(document);
+
+    ChangeSelector selector;
+    const auto selection = selector.Select(document, candidates);
+
+    REQUIRE(selection.uniqueLines.empty());
+    REQUIRE(selection.commonChanges.size() == 2);
+
+    const auto changeQuad = std::find_if(selection.commonChanges.begin(), selection.commonChanges.end(),
+                                          [](const RepeatedSequence& sequence) { return sequence.tokens.size() == 4; });
+    const auto changeA = std::find_if(selection.commonChanges.begin(), selection.commonChanges.end(),
+                                       [](const RepeatedSequence& sequence) { return sequence.tokens.size() == 1; });
+    REQUIRE(changeQuad != selection.commonChanges.end());
+    REQUIRE(changeA != selection.commonChanges.end());
+    REQUIRE(changeQuad->occurrences.size() == 2);
+    REQUIRE(changeA->tokens.front() == interner.Intern("A"));
+    REQUIRE(changeA->occurrences.size() == 3);
+}
+
