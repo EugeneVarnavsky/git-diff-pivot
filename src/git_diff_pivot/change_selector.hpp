@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -9,40 +10,37 @@
 
 namespace git_diff_pivot {
 
-// One changed line left over after selection: not part of any accepted
-// RepeatedSequence, so the renderer must show it under its own file.
+// A changed line not covered by any accepted RepeatedSequence.
 struct UniqueLine {
     std::string filePath;
     ChangedLine line;
-    // Index of the originating ChangeHunk (DiffDocument::Hunks()), so the
-    // renderer can tell apart lines from different original hunks even
-    // when they belong to the same file.
+    // Originating ChangeHunk index; distinguishes hunks within the same file.
     std::size_t hunkIndex{};
-    // Copied from the originating ChangeHunk, for building a git-style hunk
-    // header even when this line's own kind has no line in the same run.
+    // Copied from the hunk, for a git-style header even if this line's own kind is absent.
     std::uint32_t hunkAnchorOldLine{};
     std::uint32_t hunkAnchorNewLine{};
 };
 
-// The result of change selection: the conflict-free set of accepted common
-// changes, plus every changed line not covered by any of them.
+// Conflict-free accepted common changes, plus every uncovered changed line.
 struct ChangeSelection {
     std::vector<RepeatedSequence> commonChanges;
     std::vector<UniqueLine> uniqueLines;
 };
 
-// Chooses a conflict-free, deterministic set of repeated sequences worth
-// extracting into the compact review representation.
-// Candidates are ranked by estimated review-effort gain and accepted
-// greedily as long as none of their occurrences overlap an already-claimed
-// hunk range. Every changed line not covered by an accepted candidate is
-// exposed separately so the renderer can still show it under its file.
+// Chooses a conflict-free, deterministic set of repeated sequences to show
+// as common changes. Ranks candidates longest-first (ties by gain) so a
+// long verbatim repeat stays whole instead of fragmenting around a shorter,
+// more frequent sub-sequence. A conflicting candidate is split into smaller
+// candidates over its still-free token range/occurrences rather than
+// dropped. Everything left uncovered is exposed as a unique line.
 class ChangeSelector {
 public:
-    // Candidates shorter than `minSequenceLength` tokens or with fewer than
-    // `minOccurrenceCount` occurrences are discarded before ranking.
+    // Candidates below these thresholds are discarded before ranking; both must be >= 1.
     explicit ChangeSelector(std::size_t minSequenceLength = 1, std::size_t minOccurrenceCount = 2)
-        : minSequenceLength_(minSequenceLength), minOccurrenceCount_(minOccurrenceCount) {}
+        : minSequenceLength_(minSequenceLength), minOccurrenceCount_(minOccurrenceCount) {
+        assert(minSequenceLength_ >= 1);
+        assert(minOccurrenceCount_ >= 1);
+    }
 
     [[nodiscard]] ChangeSelection Select(const DiffDocument& document, std::vector<RepeatedSequence> candidates) const;
 

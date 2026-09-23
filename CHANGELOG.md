@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Fixed a bug where repeated changed lines could be reported as unique when they overlapped a more frequent common change.
+
 ## 0.2.1
 
 - Text and Markdown output: common changes now list their occurrences grouped by file (e.g. `FileA: [1, 10, 20]`) instead of one line per occurrence.
